@@ -2,7 +2,8 @@
 
 VelocitySensor::VelocitySensor(int pin, double diameter, int triggers)
     : sensorPin(pin), wheelCircumference(diameter * PI), triggersPerRevolution(triggers),
-      lastTriggerTime(0), triggerInterval(0), pulseCount(0), direction(FORWARD) {}
+      lastTriggerTime(0), triggerInterval(0), pulseCount(0), direction(FORWARD) {
+      }
 
 void VelocitySensor::begin() {
     pinMode(sensorPin, INPUT_PULLUP);
@@ -10,7 +11,7 @@ void VelocitySensor::begin() {
 }
 
 double VelocitySensor::getVelocity() {
-    if (triggerInterval > 0) {
+     if (triggerInterval > 0) {
         double timePerRevolution = (triggerInterval * triggersPerRevolution) / 1000000.0;
         return wheelCircumference / timePerRevolution;
     } else {
@@ -42,6 +43,11 @@ void IRAM_ATTR VelocitySensor::handleInterrupt() {
     unsigned long currentTime = micros();
     triggerInterval = currentTime - lastTriggerTime;
     lastTriggerTime = currentTime;
+
+    // if (triggerInterval > 0) {
+    //     double timePerRevolution = (triggerInterval * triggersPerRevolution) / 1000000.0;
+    //     double velocity = wheelCircumference / timePerRevolution;
+    // }
 
     // Increment or decrement pulse count based on direction
     if (direction == FORWARD) {

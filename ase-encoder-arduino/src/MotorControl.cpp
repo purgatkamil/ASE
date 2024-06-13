@@ -2,9 +2,11 @@
 
 MotorControl::MotorControl(int in1, int in2, int ena, int encoderPin, double wheelDiameter, int triggersPerRevolution)
     : in1(in1), in2(in2), ena(ena), targetRPM(0), currentRPM(0), targetDegrees(0), currentDegrees(0),
-      velocityPID(&currentRPM, &velocityOutput, &targetRPM, 2.0, 5.0, 1.0, DIRECT),
-      positionPID(&currentDegrees, &positionOutput, &targetDegrees, 2.0, 5.0, 1.0, DIRECT),
-      encoder(encoderPin, wheelDiameter, triggersPerRevolution), direction(FORWARD) {}
+      velocityPID(&currentRPM, &velocityOutput, &targetRPM, 20, 2, 4.5, DIRECT),
+      encoder(encoderPin, wheelDiameter, triggersPerRevolution), direction(FORWARD) {
+    // velocityPID.SetOutputLimits(-255,255);
+    velocityPID.SetSampleTime(5);
+}
 
 void MotorControl::begin() {
     pinMode(in1, OUTPUT);
@@ -12,19 +14,17 @@ void MotorControl::begin() {
     pinMode(ena, OUTPUT);
     encoder.begin();
     velocityPID.SetMode(AUTOMATIC);
-    positionPID.SetMode(AUTOMATIC);
 }
 
 void MotorControl::setVelocity(double targetRPM) {
     this->targetRPM = targetRPM;
-    positionPID.SetMode(MANUAL);
+    this->inPositionMode = false;
     velocityPID.SetMode(AUTOMATIC);
 }
 
 void MotorControl::setPosition(double targetDegrees) {
     this->targetDegrees = targetDegrees;
-    velocityPID.SetMode(MANUAL);
-    positionPID.SetMode(AUTOMATIC);
+    this->inPositionMode = true;
 }
 
 void MotorControl::update() {
@@ -32,16 +32,22 @@ void MotorControl::update() {
     currentRPM = encoder.getVelocity() * 60; // convert from m/s to RPM
     currentDegrees = (encoder.getCount() / (double)encoder.getTriggersPerRevolution()) * 360;
 
-    // Compute new output
-    velocityPID.Compute();
-    positionPID.Compute();
+    // Calculate position error and set it as targetRPM for velocity PID
+    // if (this->inPositionMode) {
+    //     positionError = targetDegrees - currentDegrees;
+    //     targetRPM = positionError * 0.15; // Proportional control for position (P controller)
+    // }
 
-    // Set motor speed
-    if (velocityPID.GetMode() == AUTOMATIC) {
-        setMotorSpeed(velocityOutput);
-    } else if (positionPID.GetMode() == AUTOMATIC) {
-        setMotorSpeed(positionOutput);
+    // Compute new velocity output
+    velocityPID.Compute();
+
+    if (abs(velocityOutput) < 30) {
+        velocityOutput = 0;
+        currentRPM = 0;
     }
+
+    // Set motor speed based on velocity PID output
+    setMotorSpeed(velocityOutput);
 }
 
 void MotorControl::setDirection(Direction dir) {
@@ -55,18 +61,18 @@ void MotorControl::setMotorSpeed(int speed) {
             digitalWrite(in1, HIGH);
             digitalWrite(in2, LOW);
         } else {
-            digitalWrite(in1, LOW);
-            digitalWrite(in2, HIGH);
-            speed = -speed;
+            // digitalWrite(in1, LOW);
+            // digitalWrite(in2, HIGH);
+            // speed = -speed;
         }
     } else { // direction == BACKWARD
         if (speed > 0) {
             digitalWrite(in1, LOW);
             digitalWrite(in2, HIGH);
         } else {
-            digitalWrite(in1, HIGH);
-            digitalWrite(in2, LOW);
-            speed = -speed;
+            // digitalWrite(in1, HIGH);
+            // digitalWrite(in2, LOW);
+            // speed = -speed;
         }
     }
     analogWrite(ena, speed);
@@ -77,5 +83,5 @@ double MotorControl::getVelocity() {
 }
 
 double MotorControl::getDistance() {
-    return (encoder.getCount() / (double)encoder.getTriggersPerRevolution()) * encoder.getWheelCircumference();
+    return (encoder.getCount() / (double)encoder.getTriggersPerRevolution()) *360;// * encoder.getWheelCircumference();
 }

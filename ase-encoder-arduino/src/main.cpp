@@ -14,6 +14,9 @@
 #define ENB 13
 #define ENCODER_PIN_LEFT 17
 
+// Servo
+// #define SERVO_PIN 34
+
 const double wheelDiameter = 0.054; // Wheel diameter in meters
 const int triggersPerRevolution = 360 / 18; // 20 triggers per revolution
 
@@ -29,26 +32,29 @@ void controlLoop() {
 }
 
 void printStatus() {
-    Serial.print("Motor A Position: ");
-    Serial.print(motorA.getDistance());
-    Serial.println(" meters");
-
-    Serial.print("Motor B Position: ");
-    Serial.print(motorB.getDistance());
-    Serial.println(" meters");
+    unsigned long currentTime = millis();
+    Serial.print(currentTime); // Print time
+    Serial.print(", ");
+    Serial.print(motorA.getVelocity()); // Print current velocity
+    Serial.print(", ");
+    Serial.print(motorA.getDistance()); // Print current distance
+    Serial.print(", ");
+    Serial.print(motorB.getVelocity()); // Print velocity PID output
+    Serial.print(", ");
+    Serial.print(motorB.getDistance()); // Print velocity PID output
+    Serial.println();
 }
+
 
 void setup() {
     Serial.begin(115200);
     motorA.begin();
     motorB.begin();
-    motorA.setPosition(360); 
-    motorA.setDirection(MotorControl::FORWARD);
-    motorB.setPosition(360);
-    motorB.setDirection(MotorControl::FORWARD);
+    motorA.setVelocity(7); // Example target RPM for motor A
+    motorB.setVelocity(7); // Example target RPM for motor B
 
-    controlLoopTicker.attach_ms(10, controlLoop);
-    printTicker.attach_ms(500, printStatus);
+    controlLoopTicker.attach_ms(5, controlLoop);
+    printTicker.attach_ms(50, printStatus);
 }
 
 void loop() {

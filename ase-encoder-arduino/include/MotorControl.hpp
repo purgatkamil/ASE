@@ -29,10 +29,11 @@ private:
     double currentDegrees;
 
     double velocityInput, velocityOutput;
-    double positionInput, positionOutput;
+    double positionError;
+
+    bool inPositionMode;
 
     PID velocityPID;
-    PID positionPID;
     VelocitySensor encoder;
     Direction direction;
 
