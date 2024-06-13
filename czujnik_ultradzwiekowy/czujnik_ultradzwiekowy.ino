@@ -3,6 +3,9 @@
 //#define trigPin 12
 //#define echoPin 11
 
+const int sensorPinLeft = 22;
+const int sensorPinRight = 23;
+
 #define trigPin 33
 #define echoPin 39
 
@@ -19,6 +22,23 @@ const int ENA = 12;  // pwm dla kanału A
 const int ENB = 14;  // pwm dla kanału B
 
 int dir = 1;
+volatile static int turning = 0;
+
+const int sensorPin = 15; // Pin do którego podłączony jest czujnik odbiciowy
+
+void IRAM_ATTR handleRightSensorInterrupt() {
+  noInterrupts();
+  EngineTurnRight();
+  turning = 1;
+  
+}
+
+void IRAM_ATTR handleLeftSensorInterrupt() {
+  noInterrupts();
+  EngineTurnLeft();
+  turning = 1;
+  
+}
 
 void EngineMoveForward(){
   dir = 1;
@@ -47,9 +67,9 @@ void EngineSoftStop(){
     //analogWrite(ENA, 0);
     //analogWrite(ENB, 0);
     digitalWrite(IN1, HIGH);
-    digitalWrite(IN2, LOW);
+    digitalWrite(IN2, HIGH);
     digitalWrite(IN3, HIGH);
-    digitalWrite(IN4, LOW);
+    digitalWrite(IN4, HIGH);
 }
 
 void EngineTurnRight(){
@@ -100,13 +120,15 @@ void setup() {
   pinMode(ENA, OUTPUT);
   pinMode(ENB, OUTPUT);
 
-  EngineSetLeftSpeed(250);
-  EngineSetRightSpeed(250);
+  EngineSetLeftSpeed(190);
+  EngineSetRightSpeed(190);
 
   serwomechanizm.attach(25);
   serwomechanizm.write(45);
 
-  EngineMoveForward();
+  pinMode(sensorPin, INPUT_PULLUP); // Ustawienie pinu czujnika jako wejście z wewnętrznym podciąganiem
+  attachInterrupt(digitalPinToInterrupt(sensorPinRight), handleRightSensorInterrupt, RISING); // Przerwanie na zboczu opadającym
+  attachInterrupt(digitalPinToInterrupt(sensorPinLeft), handleLeftSensorInterrupt, RISING);
 }
 
 long getDistance()
@@ -136,7 +158,25 @@ void loop() {
 
   Serial.println(getDistance());
   
+  if(turning != 1){
+    EngineMoveForward();
+  }
+  else
+  {
+    delay(100);
+    turning = 0;
+    interrupts();
+    EngineMoveForward();
+        
+  }
+  
+  /*delay(5000);
+  EngineSoftStop();
+  delay(2000);
+ EngineMoveBackward();  
+  delay(5000);
+  EngineSoftStop();
+  delay(1000);*/
+delay(45);
 
-
-  delay(45);
 }
