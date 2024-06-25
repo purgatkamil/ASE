@@ -1,55 +1,51 @@
 #include <ESP32Servo.h> //Biblioteka odpowiedzialna za serwa
- 
-//#define trigPin 12
-//#define echoPin 11
 
-const int sensorPinLeft = 22;
-const int sensorPinRight = 23;
+const int sensorPinLeft = 23; //odbiciowy lewy
+const int sensorPinRight = 22; //odbiciowy prawy
 
-#define trigPin 33
-#define echoPin 39
+const int trigPin = 2; //trigger ultradzwieku
+const int echoPin = 17; //echo ultradzwieku
 
-Servo serwomechanizm;  //Tworzymy obiekt, dzięki któremu możemy odwołać się do serwa 
-int pozycja = 45; //Aktualna pozycja serwa 0-180
-int zmiana = 5; //Co ile ma się zmieniać pozycja serwa?
-int kierunek = 1;
-
-const int IN1 = 32;  // Pin IN1 dla kanału A
-const int IN2 = 2;  // Pin IN2 dla kanału A
+const int IN1 = 33;  // Pin IN1 dla kanału A
+const int IN2 = 32;  // Pin IN2 dla kanału A
 const int IN3 = 27;  // Pin IN3 dla kanału B
 const int IN4 = 26;  // Pin IN4 dla kanału B
 const int ENA = 12;  // pwm dla kanału A
 const int ENB = 14;  // pwm dla kanału B
 
-int dir = 1;
+const int hallSensor = 1;
+
+const int servoPin = 25;
+
+int silniki_kierunek = 1;
 volatile static int turning = 0;
 
-const int sensorPin = 15; // Pin do którego podłączony jest czujnik odbiciowy
-
 void IRAM_ATTR handleRightSensorInterrupt() {
-  noInterrupts();
-  EngineTurnRight();
-  turning = 1;
-  
+    noInterrupts();
+    EngineFastStop();
+    EngineTurnRight();
+    //zakretWLewoPoLuku();
+    turning = 1;
 }
 
 void IRAM_ATTR handleLeftSensorInterrupt() {
-  noInterrupts();
-  EngineTurnLeft();
-  turning = 1;
-  
+    noInterrupts();
+    EngineFastStop();
+    EngineTurnLeft();
+    //zakretWPrawoPoLuku();
+    turning = 1;
 }
 
-void EngineMoveForward(){
-  dir = 1;
+void EngineMoveBackward(){
+    silniki_kierunek = 1;
     digitalWrite(IN1, HIGH);
     digitalWrite(IN2, LOW);
     digitalWrite(IN3, HIGH);
     digitalWrite(IN4, LOW);
 }
 
-void EngineMoveBackward(){
-  dir = -1;
+void EngineMoveForward(){
+    silniki_kierunek = -1;
     digitalWrite(IN1, LOW);
     digitalWrite(IN2, HIGH);
     digitalWrite(IN3, LOW);
@@ -64,8 +60,6 @@ void EngineFastStop(){
 }
 
 void EngineSoftStop(){
-    //analogWrite(ENA, 0);
-    //analogWrite(ENB, 0);
     digitalWrite(IN1, HIGH);
     digitalWrite(IN2, HIGH);
     digitalWrite(IN3, HIGH);
@@ -73,6 +67,8 @@ void EngineSoftStop(){
 }
 
 void EngineTurnRight(){
+    EngineSetLeftSpeed(210);
+    EngineSetRightSpeed(210);
     digitalWrite(IN1, LOW);
     digitalWrite(IN2, HIGH);
     digitalWrite(IN3, HIGH);
@@ -80,32 +76,65 @@ void EngineTurnRight(){
 }
 
 void EngineTurnLeft(){
+    EngineSetLeftSpeed(210);
+    EngineSetRightSpeed(210);
     digitalWrite(IN1, HIGH);
     digitalWrite(IN2, LOW);
     digitalWrite(IN3, LOW);
     digitalWrite(IN4, HIGH);
 }
 
-void EngineSetLeftSpeed(int leftSpeed)
+void EngineSetRightSpeed(int leftSpeed)
 {
   int speed = leftSpeed;
   if(leftSpeed >= 255)
   {
     speed = 250;
   }
-    analogWrite(ENA, speed);
 
+  analogWrite(ENA, speed);
 }
 
-void EngineSetRightSpeed(int rightSpeed)
+void EngineSetLeftSpeed(int rightSpeed)
 {
   int speed = rightSpeed;
   if(rightSpeed >= 255)
   {
     speed = 250;
   }
-  speed = speed + (dir * 3);
-    analogWrite(ENB, speed);
+  
+  speed = speed + (silniki_kierunek * 3);
+  analogWrite(ENB, speed);
+}
+
+void zakretWLewoPoLuku()
+{
+    EngineSetRightSpeed(210); //glowne
+    EngineSetLeftSpeed(210);
+    digitalWrite(IN1, LOW);
+    digitalWrite(IN2, HIGH);
+    digitalWrite(IN3, LOW);
+    digitalWrite(IN4, LOW);
+}
+
+void zakretWPrawoPoLuku()
+{
+    EngineSetLeftSpeed(230);  //glowne
+    EngineSetRightSpeed(180);
+    digitalWrite(IN1, LOW);
+    digitalWrite(IN2, LOW);
+    digitalWrite(IN3, LOW);
+    digitalWrite(IN4, HIGH);
+}
+
+void setServoAngle(int angle) {
+  // Przeliczamy kąt na czas trwania impulsu
+  // Serwomechanizmy zazwyczaj potrzebują impulsu od 1ms do 2ms
+  // przy kątach od 0 do 180 stopni
+  int pulseWidth = map(angle, 0, 180, 544, 2400); // Przeliczamy kąt na mikroseundy
+  digitalWrite(servoPin, HIGH);
+  delayMicroseconds(pulseWidth);
+  digitalWrite(servoPin, LOW);
 }
 
 void setup() {
@@ -120,15 +149,20 @@ void setup() {
   pinMode(ENA, OUTPUT);
   pinMode(ENB, OUTPUT);
 
-  EngineSetLeftSpeed(190);
-  EngineSetRightSpeed(190);
+  pinMode(hallSensor, INPUT);
 
-  serwomechanizm.attach(25);
-  serwomechanizm.write(45);
+  pinMode(servoPin, OUTPUT);
+  
 
-  pinMode(sensorPin, INPUT_PULLUP); // Ustawienie pinu czujnika jako wejście z wewnętrznym podciąganiem
-  attachInterrupt(digitalPinToInterrupt(sensorPinRight), handleRightSensorInterrupt, RISING); // Przerwanie na zboczu opadającym
-  attachInterrupt(digitalPinToInterrupt(sensorPinLeft), handleLeftSensorInterrupt, RISING);
+  EngineSetLeftSpeed(220);
+  EngineSetRightSpeed(210);
+
+  //pinMode(sensorPinRight, INPUT_PULLUP);
+  //pinMode(sensorPinLeft, INPUT_PULLUP);
+
+  EngineMoveForward();
+  //attachInterrupt(digitalPinToInterrupt(sensorPinRight), handleRightSensorInterrupt, RISING); // Przerwanie na zboczu opadającym
+  //attachInterrupt(digitalPinToInterrupt(sensorPinLeft), handleLeftSensorInterrupt, RISING);
 }
 
 long getDistance()
@@ -147,36 +181,102 @@ long getDistance()
   return distance;
 }
 
-void loop() {
-  if (pozycja <= 145 && pozycja >= 45) { //Jeśli pozycja mieści się w zakresie
-    serwomechanizm.write(pozycja); //Wykonaj ruch
-  } else { //Jeśli nie, to powrót na początek
-    kierunek *= -1;
-  }    
+int checkHallSensor()
+{
+  int wartosc_analogowa = 0;
+  wartosc_analogowa = analogRead(hallSensor);
+  int result = abs(wartosc_analogowa - 512);
   
-  pozycja = pozycja + (zmiana * kierunek); //Zwiększenie aktualnej pozycji serwa*/
+  return result;
+}
 
-  Serial.println(getDistance());
+int servo_pozycja = 0;
+int servo_kierunek = 1;
+int servo_zmiana = 10;
+int distance = 0;
+
+void loop() {
+  EngineMoveForward();
+  int right = digitalRead(sensorPinRight);
+  int left = digitalRead(sensorPinLeft);
+
+  if(left == LOW)
+  {
+      EngineSetLeftSpeed(250);
+  }
+  else
+  {
+      EngineSetLeftSpeed(225);    
+  }
+
+  if(right == LOW)
+  {
+      EngineSetRightSpeed(250);
+  }
+  else
+  {
+      EngineSetRightSpeed(205);    
+  }
+
+if (servo_pozycja >= 0 && servo_pozycja <= 180)
+{
+    setServoAngle(servo_pozycja);
+    servo_pozycja += (servo_kierunek * servo_zmiana);
+    if(getDistance() < 50)
+    {
+      EngineFastStop();      
+    }
+
+}
+else
+{
+    servo_kierunek *= -1;
+    servo_pozycja += (servo_kierunek * servo_zmiana);
+    // Aby uniknąć wyjścia poza zakres po zmianie kierunku, można dodać korekcję
+    if (servo_pozycja > 180)
+    {
+        servo_pozycja = 180;
+    }
+    else if (servo_pozycja < 0)
+    {
+        servo_pozycja = 0;
+    }
+}
+ //Serial.print(getDistance());
   
-  if(turning != 1){
+ delay(30);
+
+
+  /*if (servo_pozycja <= 180 && servo_pozycja >= 0) //Jeśli pozycja mieści się w zakresie
+  { 
+    serwomechanizm.write(servo_pozycja); //Wykonaj ruch
+  }
+  else //Jeśli nie, to powrót na początek
+  {
+    servo_kierunek *= -1;
+  } */   
+  
+ // servo_pozycja = servo_pozycja + (servo_zmiana * servo_kierunek); //Zwiększenie aktualnej pozycji serwa
+
+  //Serial.println(getDistance());
+  
+
+  
+ /* if(turning != 1)
+  {
     EngineMoveForward();
   }
   else
   {
-    delay(100);
-    turning = 0;
+    delay(50);
+    turning = 0;  
     interrupts();
-    EngineMoveForward();
-        
-  }
-  
-  /*delay(5000);
-  EngineSoftStop();
-  delay(2000);
- EngineMoveBackward();  
-  delay(5000);
-  EngineSoftStop();
-  delay(1000);*/
-delay(45);
+    EngineMoveForward(); 
+  }*/
 
+/*int checkHall = checkHallSensor();
+if(checkHall > 20);
+{
+  EngineFastStop();
+}*/
 }
