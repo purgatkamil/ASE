@@ -1,15 +1,6 @@
 #include "ultrasonic_sensor.h"
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-
-#include <driver/ledc.h>
-#include <driver/gpio.h>
-#include <driver/mcpwm_cap.h>
-#include <esp_log.h>
-#include <esp_private/esp_clk.h>
-
-static const char *TAG = "ultrasonic-sensor";
+static const char *TAG = "ultrasonic-servo-sensor";
 
 static bool ultrasonic_echo_callback(mcpwm_cap_channel_handle_t cap_chan, const mcpwm_capture_event_data_t *edata, void *user_data)
 {
@@ -33,27 +24,59 @@ static bool ultrasonic_echo_callback(mcpwm_cap_channel_handle_t cap_chan, const 
     return high_task_wakeup == pdTRUE;
 }
 
-static void ledc_trig_init(void)
+static void ledc_servo_sonar_init(void)
 {
-    ESP_LOGI(TAG, "Initializing LEDC Timer");
-    ledc_timer_config_t ledc_timer = {
-        .speed_mode = LEDC_MODE,
-        .duty_resolution = LEDC_DUTY_RES,
-        .timer_num = LEDC_TIMER,
-        .freq_hz = LEDC_FREQUENCY,
+    /////////////////
+    // Timers init //
+    /////////////////
+    ESP_LOGI(TAG, "Initializing ultrasonic LEDC timer");
+    ledc_timer_config_t sonar_ledc_timer = {
+        .speed_mode = SONAR_LEDC_MODE,
+        .duty_resolution = SONAR_LEDC_DUTY_RES,
+        .timer_num = SONAR_LEDC_TIMER,
+        .freq_hz = SONAR_LEDC_FREQUENCY,
         .clk_cfg = LEDC_AUTO_CLK};
-    ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
+    ESP_ERROR_CHECK(ledc_timer_config(&sonar_ledc_timer));
 
-    ESP_LOGI(TAG, "Initializing LEDC channel (output at GPIO %d)", ULTRASONIC_TRIG_GPIO);
-    ledc_channel_config_t ledc_channel = {
-        .speed_mode = LEDC_MODE,
-        .channel = LEDC_CHANNEL,
-        .timer_sel = LEDC_TIMER,
+    ESP_LOGI(TAG, "Initializing servo LEDC timer");
+    ledc_timer_config_t servo_ledc_timer = {
+        .speed_mode = SERVO_LEDC_MODE,
+        .duty_resolution = SERVO_LEDC_DUTY_RES,
+        .timer_num = SERVO_LEDC_TIMER,
+        .freq_hz = SERVO_LEDC_FREQUENCY,
+        .clk_cfg = LEDC_AUTO_CLK};
+    ESP_ERROR_CHECK(ledc_timer_config(&servo_ledc_timer));
+
+
+    ///////////////////
+    // Channels init //
+    ///////////////////
+    ESP_LOGI(TAG, "Initializing LEDC ultrasonic trigger channel (output at GPIO %d)", ULTRASONIC_TRIG_GPIO);
+    ledc_channel_config_t sonar_ledc_channel = {
+        .speed_mode = SONAR_LEDC_MODE,
+        .channel = SONAR_LEDC_CHANNEL,
+        .timer_sel = SONAR_LEDC_TIMER,
         .intr_type = LEDC_INTR_DISABLE,
         .gpio_num = ULTRASONIC_TRIG_GPIO,
-        .duty = LEDC_DUTY,
+        .duty = SONAR_LEDC_DUTY,
         .hpoint = 0};
-    ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
+    ESP_ERROR_CHECK(ledc_channel_config(&sonar_ledc_channel));
+
+    ESP_LOGI(TAG, "Initializing LEDC servo channel (output at GPIO %d)", SERVO_PWM_GPIO);
+    ledc_channel_config_t servo_ledc_channel = {
+        .speed_mode = SERVO_LEDC_MODE,
+        .channel = SERVO_LEDC_CHANNEL,
+        .timer_sel = SERVO_LEDC_TIMER,
+        .intr_type = LEDC_INTR_DISABLE,
+        .gpio_num = SERVO_PWM_GPIO,
+        .duty = 0,
+        .hpoint = 0};
+    ESP_ERROR_CHECK(ledc_channel_config(&servo_ledc_channel));
+}
+
+static inline uint32_t angle_to_duty(int angle)
+{
+    return (angle - SERVO_MIN_DEGREE) * (SERVO_MAX_PULSEWIDTH_US - SERVO_MIN_PULSEWIDTH_US) / (SERVO_MAX_DEGREE - SERVO_MIN_DEGREE) + SERVO_MIN_PULSEWIDTH_US;
 }
 
 void ultrasonic_sensor_task()
@@ -92,12 +115,24 @@ void ultrasonic_sensor_task()
     ESP_ERROR_CHECK(mcpwm_capture_timer_enable(cap_timer));
     ESP_ERROR_CHECK(mcpwm_capture_timer_start(cap_timer));
 
-    // Configure LEDC peripherial to send TRIG signal
-    ledc_trig_init();
+    // Configure LEDC peripherial
+    ledc_servo_sonar_init();
 
     uint32_t tof_ticks;
+    uint32_t servo_duty = 0;
+    int angle = -180;
+    int8_t angle_dir = 1;
     for (;;)
     {
+        // LEDC_TIMER_20_BIT // 2^20 = 1048576, 100 Hz -> T=10ms   
+        // Convert pulse width to duty cycle value
+        servo_duty = (angle_to_duty(angle) * ((1<<SERVO_LEDC_DUTY_RES)-1)) *  SERVO_LEDC_FREQUENCY / 1000000;
+
+        ESP_LOGI(TAG, "Setting servo angle of %d deg (ton=%luus)", angle, servo_duty);
+
+        ESP_ERROR_CHECK(ledc_set_duty(SERVO_LEDC_MODE, SERVO_LEDC_CHANNEL, servo_duty));
+        ESP_ERROR_CHECK(ledc_update_duty(SERVO_LEDC_MODE, SERVO_LEDC_CHANNEL));
+
         if (xTaskNotifyWait(0x00, ULONG_MAX, &tof_ticks, pdMS_TO_TICKS(1000)) == pdTRUE)
         {
             float pulse_width_us = tof_ticks * (1000000.0 / esp_clk_apb_freq());
@@ -111,5 +146,16 @@ void ultrasonic_sensor_task()
             ESP_LOGI(TAG, "Measured distance: %.2fcm", distance);
         }
         vTaskDelay(pdMS_TO_TICKS(1000));
+
+        angle += 30 * angle_dir;
+        
+        if (angle >= SERVO_MAX_DEGREE) {
+            angle = SERVO_MAX_DEGREE;
+            angle_dir *= -1;
+        } else if (angle <= SERVO_MIN_DEGREE) {
+            angle = SERVO_MIN_DEGREE;
+            angle_dir *= -1;
+        }
+
     }
 }
