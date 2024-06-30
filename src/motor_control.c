@@ -1,6 +1,6 @@
 #include "motor_control.h"
 
-static const char *TAG = "mcpwm-user";
+static const char *TAG = "motor-control";
 
 static void enable_start_mcpwm_tim(mcpwm_timer_handle_t tim_h)
 {
@@ -22,9 +22,9 @@ static void create_tim_oper(mcpwm_timer_handle_t *tim_h, mcpwm_oper_handle_t *op
     mcpwm_timer_config_t mcpwm_timer_conf = {
         .group_id = 0,
         .clk_src = MCPWM_TIMER_CLK_SRC_DEFAULT,
-        .resolution_hz = 10000000, // 10 MHz -> 100ns
+        .resolution_hz = MCPWM_RESOLUTION_HZ,
         .count_mode = MCPWM_TIMER_COUNT_MODE_UP,
-        .period_ticks = 10000, // 10 000 ticks -> 1 kHz
+        .period_ticks = MCPWM_PERIOD_TICKS,
     };
 
     ESP_ERROR_CHECK(mcpwm_new_timer(&mcpwm_timer_conf, tim_h));
@@ -65,6 +65,44 @@ static void conf_mcpwm_gen_cmp(mcpwm_oper_handle_t oper, mcpwm_cmpr_handle_t *cm
                                                                 MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, *cmp_h, MCPWM_GEN_ACTION_LOW)));
 }
 
+static inline void setup_motors_dir_gpio()
+{
+    static gpio_config_t io_conf = {
+        .intr_type = GPIO_INTR_DISABLE,
+        .mode = GPIO_MODE_OUTPUT,
+        .pin_bit_mask = (1ULL << MOTOR_LEFT_IN1_GPIO) |
+                        (1ULL << MOTOR_LEFT_IN2_GPIO) |
+                        (1ULL << MOTOR_RIGHT_IN1_GPIO) |
+                        (1ULL << MOTOR_RIGHT_IN2_GPIO),
+        .pull_down_en = 0,
+        .pull_up_en = 0};
+    gpio_config(&io_conf);
+}
+
+// Based on docs:
+// https://botland.com.pl/sterowniki-silnikow-moduly/3164-l298n-dwukanalowy-sterownik-silnikow-modul-12v-2a-5904422359317.html
+static inline void motor_mode_set_cwise(gpio_num_t GPIO_IN1, gpio_num_t GPIO_IN2)
+{
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_IN1, 1));
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_IN2, 0));
+}
+
+static inline void motor_mode_set_ccwise(gpio_num_t GPIO_IN1, gpio_num_t GPIO_IN2)
+{
+    motor_mode_set_cwise(GPIO_IN2, GPIO_IN1);
+}
+
+// For now leaving it unimplemented
+// void motor_mode_set_cwise(gpio_num_t GPIO_IN1, gpio_num_t GPIO_IN2)
+// {
+
+// }
+
+// void motor_mode_set_cwise(gpio_num_t GPIO_IN1, gpio_num_t GPIO_IN2)
+// {
+
+// }
+
 void motor_control_task()
 {
     mcpwm_timer_handle_t tim_h = NULL;
@@ -74,19 +112,40 @@ void motor_control_task()
     mcpwm_cmpr_handle_t cmp_hA = NULL;
     mcpwm_cmpr_handle_t cmp_hB = NULL;
 
-    conf_mcpwm_gen_cmp(oper, &cmp_hA, GPIO_MOTOR_LEFT);
-    conf_mcpwm_gen_cmp(oper, &cmp_hB, GPIO_MOTOR_RIGHT);
+    conf_mcpwm_gen_cmp(oper, &cmp_hA, MOTOR_LEFT_EN_GPIO);
+    conf_mcpwm_gen_cmp(oper, &cmp_hB, MOTOR_RIGHT_EN_GPIO);
+
+    setup_motors_dir_gpio();
+    motor_mode_set_ccwise(MOTOR_LEFT_IN1_GPIO, MOTOR_LEFT_IN2_GPIO);
+    motor_mode_set_ccwise(MOTOR_RIGHT_IN1_GPIO, MOTOR_RIGHT_IN2_GPIO);
 
     enable_start_mcpwm_tim(tim_h);
 
-    int i = 0, j = 0;
+    int i = 0, j = 0, dv = 0;
     for (;;)
     {
-        uint32_t control_val = 1000 + 6000 * i++;
+        uint32_t control_val = 5500 + 2000 * i++;
         ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(cmp_hA, control_val));
         ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(cmp_hB, control_val));
         if (i == 2)
+        {
             i -= 2;
+        }
+
+        if (dv++ == 1)
+        {
+            ESP_LOGI(TAG, "Setting CWISE");
+            motor_mode_set_cwise(MOTOR_LEFT_IN1_GPIO, MOTOR_LEFT_IN2_GPIO);
+            motor_mode_set_cwise(MOTOR_RIGHT_IN1_GPIO, MOTOR_RIGHT_IN2_GPIO);
+            dv = 0;
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Setting CCWISE");
+            motor_mode_set_ccwise(MOTOR_LEFT_IN1_GPIO, MOTOR_LEFT_IN2_GPIO);
+            motor_mode_set_ccwise(MOTOR_RIGHT_IN1_GPIO, MOTOR_RIGHT_IN2_GPIO);
+        }
+
         if (j++ == 10)
         {
             disable_mcpwm_tim(tim_h);
