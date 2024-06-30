@@ -1,0 +1,15 @@
+dependencies:
+  espressif/bdc_motor:
+    component_hash: null
+    source:
+      path: C:\Users\rosia\Documents\Studia\ASE\managed_components\espressif__bdc_motor
+      type: local
+    version: 0.1.0
+  idf:
+    component_hash: null
+    source:
+      type: idf
+    version: 5.2.1
+manifest_hash: 9597963e8af96c354d0ebb37cd01eed2f4e97d1ccb87756304db3d93203d12ac
+target: esp32
+version: 1.0.0
