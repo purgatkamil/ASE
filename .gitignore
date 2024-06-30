@@ -4,4 +4,4 @@
 .vscode/launch.json
 .vscode/ipch
 
-managed_components/
+# managed_components/
