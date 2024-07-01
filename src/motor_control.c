@@ -146,7 +146,11 @@ void motor_control_task(void *pvParameters)
                 timer_enabled = 0;
             }
 
-            // lewy clockwise dla control > 0
+            // left motor rotates clockwise for control > 0
+            // to simplify control, dirty trick of inverting control
+            // signal is applied. in this way control with the same sign
+            // allows robot to drive in the same direction. not ideal but helpful
+            motors_control.speed_cmd.right *= -1;
 
             // Set spinning direction based on control sign (positive or negative)
             set_dir_control_based(motors_control.speed_cmd.left,

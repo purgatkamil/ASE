@@ -34,4 +34,17 @@ typedef struct
     uint8_t cmd_flags;
 } motors_control_msg_t;
 
+typedef enum
+{
+    IR_ISR_GPIO_BOT_LEFT_ID = 0u,
+    IR_ISR_GPIO_BOT_CENTER_ID = 1u,
+    IR_ISR_GPIO_BOT_RIGHT_ID = 2u,
+} ir_isr_gpio_id;
+
+typedef struct
+{
+    uint8_t gpio_id;
+    gpio_num_t gpio_num;
+} ir_isr_arg_t;
+
 #endif
