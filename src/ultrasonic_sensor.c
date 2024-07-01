@@ -47,7 +47,6 @@ static void ledc_servo_sonar_init(void)
         .clk_cfg = LEDC_AUTO_CLK};
     ESP_ERROR_CHECK(ledc_timer_config(&servo_ledc_timer));
 
-
     ///////////////////
     // Channels init //
     ///////////////////
@@ -74,12 +73,7 @@ static void ledc_servo_sonar_init(void)
     ESP_ERROR_CHECK(ledc_channel_config(&servo_ledc_channel));
 }
 
-static inline uint32_t angle_to_duty(int angle)
-{
-    return (angle - SERVO_MIN_DEGREE) * (SERVO_MAX_PULSEWIDTH_US - SERVO_MIN_PULSEWIDTH_US) / (SERVO_MAX_DEGREE - SERVO_MIN_DEGREE) + SERVO_MIN_PULSEWIDTH_US;
-}
-
-void ultrasonic_sensor_task()
+static void inline init_start_mcpwm_capture()
 {
     ESP_LOGI(TAG, "Install capture timer");
     mcpwm_cap_timer_handle_t cap_timer = NULL;
@@ -114,48 +108,90 @@ void ultrasonic_sensor_task()
     ESP_LOGI(TAG, "Enable and start capture timer");
     ESP_ERROR_CHECK(mcpwm_capture_timer_enable(cap_timer));
     ESP_ERROR_CHECK(mcpwm_capture_timer_start(cap_timer));
+}
+
+static inline uint32_t angle_to_duty(int angle)
+{
+    return (angle - SERVO_MIN_DEGREE) * (SERVO_MAX_PULSEWIDTH_US - SERVO_MIN_PULSEWIDTH_US) / (SERVO_MAX_DEGREE - SERVO_MIN_DEGREE) + SERVO_MIN_PULSEWIDTH_US;
+}
+
+void ultrasonic_sensor_task(void *pvParameters)
+{
+    // Init and start mcpwm capture peripherial used to 
+    // measure pulse width that ultrasonic sensor returns
+    init_start_mcpwm_capture();
 
     // Configure LEDC peripherial
     ledc_servo_sonar_init();
 
+    // Get handle to main task to be notified with measurement values
+    // TaskHandle_t main_task_h = (TaskHandle_t)pvParameters;
+    QueueHandle_t sonar_queue_h = (QueueHandle_t) pvParameters;
+
+    ultrasonic_measurement_t sonar_meas;
+
     uint32_t tof_ticks;
     uint32_t servo_duty = 0;
-    int angle = -180;
+    int angle = 0;
     int8_t angle_dir = 1;
+    static const int16_t scan_range_one_way = 80;
     for (;;)
     {
-        // LEDC_TIMER_20_BIT // 2^20 = 1048576, 100 Hz -> T=10ms   
+        // LEDC_TIMER_20_BIT // 2^20 = 1048576, 100 Hz -> T=10ms
         // Convert pulse width to duty cycle value
-        servo_duty = (angle_to_duty(angle) * ((1<<SERVO_LEDC_DUTY_RES)-1)) *  SERVO_LEDC_FREQUENCY / 1000000;
+        servo_duty = (angle_to_duty(angle) * ((1 << SERVO_LEDC_DUTY_RES) - 1)) * SERVO_LEDC_FREQUENCY / 1000000;
 
-        ESP_LOGI(TAG, "Setting servo angle of %d deg (ton=%luus)", angle, servo_duty);
+        // ESP_LOGI(TAG, "Setting servo angle of %d deg (ton=%luus)", angle, servo_duty);
 
         ESP_ERROR_CHECK(ledc_set_duty(SERVO_LEDC_MODE, SERVO_LEDC_CHANNEL, servo_duty));
         ESP_ERROR_CHECK(ledc_update_duty(SERVO_LEDC_MODE, SERVO_LEDC_CHANNEL));
 
-        if (xTaskNotifyWait(0x00, ULONG_MAX, &tof_ticks, pdMS_TO_TICKS(1000)) == pdTRUE)
+        // Wait a little before actually checking the result
+        // because servo takes some time to rotate before it can reliably measure
+        vTaskDelay(pdMS_TO_TICKS(DELAY_AFTER_SERVO_MOVEMENT_MS));
+
+        if (xTaskNotifyWait(0x00, ULONG_MAX, &tof_ticks, pdMS_TO_TICKS(110)) == pdTRUE)
         {
             float pulse_width_us = tof_ticks * (1000000.0 / esp_clk_apb_freq());
-            if (pulse_width_us > 35000)
+            // convert the pulse width into measure distance
+            float distance = (float)pulse_width_us / 58;
+            if (distance > 150)
             {
                 // out of range
                 continue;
             }
-            // convert the pulse width into measure distance
-            float distance = (float)pulse_width_us / 58;
-            ESP_LOGI(TAG, "Measured distance: %.2fcm", distance);
-        }
-        vTaskDelay(pdMS_TO_TICKS(1000));
 
-        angle += 30 * angle_dir;
-        
-        if (angle >= SERVO_MAX_DEGREE) {
-            angle = SERVO_MAX_DEGREE;
-            angle_dir *= -1;
-        } else if (angle <= SERVO_MIN_DEGREE) {
-            angle = SERVO_MIN_DEGREE;
-            angle_dir *= -1;
+            sonar_meas.angle = angle;
+            sonar_meas.distance = distance;
+
+            if (xQueueSend(sonar_queue_h, &sonar_meas, pdMS_TO_TICKS(0)) != pdTRUE)
+            {
+                ESP_LOGE(TAG, "Failed to add sonar measurement to queue!");
+            }
+
+            // Whoops
+            // xTaskNotify(main_task_h, sonar_notif, eSetValueWithOverwrite);
+            // ESP_LOGI(TAG, "Measured distance: %.2fcm", distance);
         }
 
+        // Time before making next measurement
+        vTaskDelay(pdMS_TO_TICKS(300 - DELAY_AFTER_SERVO_MOVEMENT_MS));
+
+        angle += 20 * angle_dir;
+
+        // if (angle >= SERVO_MAX_DEGREE)
+        if (angle >= scan_range_one_way)
+        {
+            // angle = SERVO_MAX_DEGREE;
+            angle = scan_range_one_way;
+            angle_dir *= -1;
+        }
+        // else if (angle <= SERVO_MIN_DEGREE)
+        else if (angle <= -scan_range_one_way)
+        {
+            // angle = SERVO_MIN_DEGREE;
+            angle = -scan_range_one_way;
+            angle_dir *= -1;
+        }
     }
 }

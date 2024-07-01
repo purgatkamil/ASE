@@ -121,35 +121,41 @@ void motor_control_task()
 
     enable_start_mcpwm_tim(tim_h);
 
-    int i = 0, j = 0, dv = 0;
+    // int i = 0, j = 0, dv = 0;
     for (;;)
     {
-        uint32_t control_val = 5500 + 2000 * i++;
-        ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(cmp_hA, control_val));
-        ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(cmp_hB, control_val));
-        if (i == 2)
-        {
-            i -= 2;
-        }
+        //////////////////////////////
+        ///////// Demo code //////////
+        //////////////////////////////
+        // uint32_t control_val = 5500 + 2000 * i++;
+        // ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(cmp_hA, control_val));
+        // ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(cmp_hB, control_val));
+        // if (i == 2)
+        // {
+        //     i -= 2;
+        // }
 
-        if (dv++ == 1)
-        {
-            ESP_LOGI(TAG, "Setting CWISE");
-            motor_mode_set_cwise(MOTOR_LEFT_IN1_GPIO, MOTOR_LEFT_IN2_GPIO);
-            motor_mode_set_cwise(MOTOR_RIGHT_IN1_GPIO, MOTOR_RIGHT_IN2_GPIO);
-            dv = 0;
-        }
-        else
-        {
-            ESP_LOGI(TAG, "Setting CCWISE");
-            motor_mode_set_ccwise(MOTOR_LEFT_IN1_GPIO, MOTOR_LEFT_IN2_GPIO);
-            motor_mode_set_ccwise(MOTOR_RIGHT_IN1_GPIO, MOTOR_RIGHT_IN2_GPIO);
-        }
+        // if (dv++ == 1)
+        // {
+        //     ESP_LOGI(TAG, "Setting CWISE");
+        //     motor_mode_set_cwise(MOTOR_LEFT_IN1_GPIO, MOTOR_LEFT_IN2_GPIO);
+        //     motor_mode_set_cwise(MOTOR_RIGHT_IN1_GPIO, MOTOR_RIGHT_IN2_GPIO);
+        //     dv = 0;
+        // }
+        // else
+        // {
+        //     ESP_LOGI(TAG, "Setting CCWISE");
+        //     motor_mode_set_ccwise(MOTOR_LEFT_IN1_GPIO, MOTOR_LEFT_IN2_GPIO);
+        //     motor_mode_set_ccwise(MOTOR_RIGHT_IN1_GPIO, MOTOR_RIGHT_IN2_GPIO);
+        // }
 
-        if (j++ == 10)
-        {
-            disable_mcpwm_tim(tim_h);
-        }
+        // if (j++ == 10)
+        // {
+        //     disable_mcpwm_tim(tim_h);
+        // }
+        //////////////////////////////
+
+
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 1 second
     }
 }

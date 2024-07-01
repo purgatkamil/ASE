@@ -3,12 +3,15 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
 
 #include <driver/ledc.h>
 #include <driver/gpio.h>
 #include <driver/mcpwm_cap.h>
 #include <esp_log.h>
 #include <esp_private/esp_clk.h>
+
+#include "ase_typedefs.h"
 
 #define ULTRASONIC_TRIG_GPIO GPIO_NUM_2
 #define ULTRASONIC_ECHO_GPIO GPIO_NUM_17
@@ -32,6 +35,16 @@
 #define SERVO_MIN_DEGREE -180         // Minimum angle
 #define SERVO_MAX_DEGREE 180          // Maximum angle
 
-void ultrasonic_sensor_task();
+// Time that is waited before taking measurement after commanding 
+// new servo position (to make sure servo has enough time to move) 
+#define DELAY_AFTER_SERVO_MOVEMENT_MS 50
+
+// Maximum distance that is propagated further onto the system
+// bigger values are still measured, but they are not passed
+// to queue that is then processed in main task.
+// This approach should minimise amount of glitched readings.
+#define SONAR_MAX_DISTANCE_CM 150
+
+void ultrasonic_sensor_task(void* pvParameters);
 
 #endif

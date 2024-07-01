@@ -18,6 +18,7 @@
 #define MCPWM_RESOLUTION_HZ 10000000 // 10 MHz -> 100ns time resolution
 #define MCPWM_PERIOD_TICKS 10000 // 10 000 ticks * time resolution 100ns -> 1 kHz
 
+
 /*
 * Commenting out function declarations as they are not required to be called by the user
 * Only motor control task function should be visible, as thats the point where interfacing occours.
