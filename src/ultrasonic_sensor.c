@@ -117,7 +117,7 @@ static inline uint32_t angle_to_duty(int angle)
 
 void ultrasonic_sensor_task(void *pvParameters)
 {
-    // Init and start mcpwm capture peripherial used to 
+    // Init and start mcpwm capture peripherial used to
     // measure pulse width that ultrasonic sensor returns
     init_start_mcpwm_capture();
 
@@ -126,7 +126,7 @@ void ultrasonic_sensor_task(void *pvParameters)
 
     // Get handle to main task to be notified with measurement values
     // TaskHandle_t main_task_h = (TaskHandle_t)pvParameters;
-    QueueHandle_t sonar_queue_h = (QueueHandle_t) pvParameters;
+    QueueHandle_t sonar_queue_h = (QueueHandle_t)pvParameters;
 
     ultrasonic_measurement_t sonar_meas;
 
@@ -177,6 +177,7 @@ void ultrasonic_sensor_task(void *pvParameters)
         // Time before making next measurement
         vTaskDelay(pdMS_TO_TICKS(300 - DELAY_AFTER_SERVO_MOVEMENT_MS));
 
+#ifdef ENABLE_SERVO_MOVEMENT
         angle += 20 * angle_dir;
 
         // if (angle >= SERVO_MAX_DEGREE)
@@ -193,5 +194,10 @@ void ultrasonic_sensor_task(void *pvParameters)
             angle = -scan_range_one_way;
             angle_dir *= -1;
         }
+#endif
+
+#ifndef ENABLE_SERVO_MOVEMENT
+        angle = 0;
+#endif
     }
 }

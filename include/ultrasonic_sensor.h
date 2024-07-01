@@ -45,6 +45,9 @@
 // This approach should minimise amount of glitched readings.
 #define SONAR_MAX_DISTANCE_CM 150
 
+// If not commented servo will be scanning, otherwise fixed to 0 degrees.
+#define ENABLE_SERVO_MOVEMENT
+
 void ultrasonic_sensor_task(void* pvParameters);
 
 #endif
