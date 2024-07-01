@@ -92,70 +92,78 @@ static inline void motor_mode_set_ccwise(gpio_num_t GPIO_IN1, gpio_num_t GPIO_IN
     motor_mode_set_cwise(GPIO_IN2, GPIO_IN1);
 }
 
-// For now leaving it unimplemented
-// void motor_mode_set_cwise(gpio_num_t GPIO_IN1, gpio_num_t GPIO_IN2)
-// {
+static uint32_t control_to_cmp_ticks(double control)
+{
+    double absed = fabs(control);
+    return (uint32_t)(absed * (double)MCPWM_PERIOD_TICKS);
+}
 
-// }
+static void set_dir_control_based(double control, gpio_num_t IN1, gpio_num_t IN2)
+{
+    if (control < 0)
+        motor_mode_set_cwise(IN1, IN2);
+    else
+        motor_mode_set_ccwise(IN1, IN2);
+}
 
-// void motor_mode_set_cwise(gpio_num_t GPIO_IN1, gpio_num_t GPIO_IN2)
-// {
-
-// }
-
-void motor_control_task()
+void motor_control_task(void *pvParameters)
 {
     mcpwm_timer_handle_t tim_h = NULL;
     mcpwm_oper_handle_t oper = NULL;
     create_tim_oper(&tim_h, &oper);
 
-    mcpwm_cmpr_handle_t cmp_hA = NULL;
-    mcpwm_cmpr_handle_t cmp_hB = NULL;
+    mcpwm_cmpr_handle_t cmp_mleft_h = NULL;
+    mcpwm_cmpr_handle_t cmp_mright_h = NULL;
 
-    conf_mcpwm_gen_cmp(oper, &cmp_hA, MOTOR_LEFT_EN_GPIO);
-    conf_mcpwm_gen_cmp(oper, &cmp_hB, MOTOR_RIGHT_EN_GPIO);
+    conf_mcpwm_gen_cmp(oper, &cmp_mleft_h, MOTOR_LEFT_EN_GPIO);
+    conf_mcpwm_gen_cmp(oper, &cmp_mright_h, MOTOR_RIGHT_EN_GPIO);
 
     setup_motors_dir_gpio();
-    motor_mode_set_ccwise(MOTOR_LEFT_IN1_GPIO, MOTOR_LEFT_IN2_GPIO);
-    motor_mode_set_ccwise(MOTOR_RIGHT_IN1_GPIO, MOTOR_RIGHT_IN2_GPIO);
 
-    enable_start_mcpwm_tim(tim_h);
+    QueueHandle_t motors_control_q_h = (QueueHandle_t)pvParameters;
 
-    // int i = 0, j = 0, dv = 0;
+    motors_control_msg_t motors_control = {
+        .speed_cmd = {
+            .left = 0.0f,
+            .right = 0.0f}};
+    CLEAR_BIT(motors_control.cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);
+
+    bool timer_enabled = false;
     for (;;)
     {
-        //////////////////////////////
-        ///////// Demo code //////////
-        //////////////////////////////
-        // uint32_t control_val = 5500 + 2000 * i++;
-        // ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(cmp_hA, control_val));
-        // ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(cmp_hB, control_val));
-        // if (i == 2)
-        // {
-        //     i -= 2;
-        // }
+        if (xQueueReceive(motors_control_q_h, &motors_control, portMAX_DELAY) == pdTRUE)
+        {
+            // New control message has been issued
+            bool enable_motors = IS_BIT_SET(motors_control.cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);
+            if (enable_motors && !timer_enabled)
+            {
+                enable_start_mcpwm_tim(tim_h);
+                timer_enabled = 1;
+            }
+            else if (!enable_motors && timer_enabled)
+            {
+                disable_mcpwm_tim(tim_h);
+                timer_enabled = 0;
+            }
 
-        // if (dv++ == 1)
-        // {
-        //     ESP_LOGI(TAG, "Setting CWISE");
-        //     motor_mode_set_cwise(MOTOR_LEFT_IN1_GPIO, MOTOR_LEFT_IN2_GPIO);
-        //     motor_mode_set_cwise(MOTOR_RIGHT_IN1_GPIO, MOTOR_RIGHT_IN2_GPIO);
-        //     dv = 0;
-        // }
-        // else
-        // {
-        //     ESP_LOGI(TAG, "Setting CCWISE");
-        //     motor_mode_set_ccwise(MOTOR_LEFT_IN1_GPIO, MOTOR_LEFT_IN2_GPIO);
-        //     motor_mode_set_ccwise(MOTOR_RIGHT_IN1_GPIO, MOTOR_RIGHT_IN2_GPIO);
-        // }
+            // lewy clockwise dla control > 0
 
-        // if (j++ == 10)
-        // {
-        //     disable_mcpwm_tim(tim_h);
-        // }
-        //////////////////////////////
+            // Set spinning direction based on control sign (positive or negative)
+            set_dir_control_based(motors_control.speed_cmd.left,
+                                  MOTOR_LEFT_IN1_GPIO,
+                                  MOTOR_LEFT_IN2_GPIO);
 
+            set_dir_control_based(motors_control.speed_cmd.right,
+                                  MOTOR_RIGHT_IN1_GPIO,
+                                  MOTOR_RIGHT_IN2_GPIO);
 
-        vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 1 second
+            ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(
+                cmp_mleft_h,
+                control_to_cmp_ticks(motors_control.speed_cmd.left)));
+
+            ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(
+                cmp_mright_h,
+                control_to_cmp_ticks(motors_control.speed_cmd.right)));
+        }
     }
 }

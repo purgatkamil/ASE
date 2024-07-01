@@ -4,9 +4,34 @@
 // For types availability
 #include "freertos/FreeRTOS.h"
 
-typedef struct {
+// Bitwise operations macros to easy
+// set flags in motor control structure
+#define SET_BIT(var, mask) ((var) |= (mask))
+#define CLEAR_BIT(var, mask) ((var) &= ~(mask))
+#define IS_BIT_SET(var, mask) (((var) & (mask)) != 0)
+
+typedef struct
+{
     int16_t angle;
     float distance;
 } ultrasonic_measurement_t;
+
+typedef enum
+{
+    MOTORS_CONTROL_FLAGS_ENABLE = (1 << 0),
+} motors_control_mask;
+
+typedef struct
+{
+    // Left and right speed are in range [-1; 1]
+    double left;
+    double right;
+} motors_speed_t;
+
+typedef struct
+{
+    motors_speed_t speed_cmd;
+    uint8_t cmd_flags;
+} motors_control_msg_t;
 
 #endif
