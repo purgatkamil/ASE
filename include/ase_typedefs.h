@@ -10,12 +10,6 @@
 #define CLEAR_BIT(var, mask) ((var) &= ~(mask))
 #define IS_BIT_SET(var, mask) (((var) & (mask)) != 0)
 
-typedef struct
-{
-    int16_t angle;
-    float distance;
-} ultrasonic_measurement_t;
-
 typedef enum
 {
     MOTORS_CONTROL_FLAGS_ENABLE = (1 << 0),
@@ -39,14 +33,13 @@ typedef enum
     MISSION_STATE_IDLE = 0,
     MISSION_STATE_FOLLOW_LINE,
     MISSION_STATE_AVOID_OBSTACLE,
-    MISSION_STATE_TURN,
     MISSION_STATE_STOP
 } mission_state_t;
 
-typedef enum 
+typedef enum
 {
-    MISSION_STATE_TURN_DIR_LEFT = 0,
-    MISSION_STATE_TURN_DIR_RIGHT
-} mission_state_turn_dir_t;
+    LF_STATE_ACTIVE = 0,
+    LF_STATE_INACTIVE
+} lf_state_command_t;
 
 #endif

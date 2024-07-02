@@ -1,6 +1,9 @@
 #ifndef HELPERS_H
 #define HELPERS_H
 
+#include "freertos/FreeRTOS.h"
+#include "ase_typedefs.h"
+
 #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
 #define BYTE_TO_BINARY(byte)         \
     ((byte) & 0x80 ? '1' : '0'),     \
@@ -42,4 +45,16 @@ static inline void sonar_motors_q_ok_or_abort(QueueHandle_t sonar_q, QueueHandle
 
 // (count_n_of_ones(ir_c_history & (~((uint32_t)0x05))) >= 15 && (count_n_of_ones((~ir_c_history) & 0x05)) >= 4)
 
+
+static inline BaseType_t send_mot_spd(
+    QueueHandle_t q,
+    motors_control_msg_t *mc,
+    double spdLeft,
+    double spdRight,
+    TickType_t q_wait_ticks)
+{
+    mc->speed_cmd.left = spdLeft;
+    mc->speed_cmd.right = spdRight;
+    return xQueueSend(q, mc, q_wait_ticks);
+}
 #endif
