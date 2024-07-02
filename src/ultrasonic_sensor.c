@@ -133,8 +133,7 @@ void ultrasonic_sensor_task(void *pvParameters)
     uint32_t tof_ticks;
     uint32_t servo_duty = 0;
     int angle = 0;
-    int8_t angle_dir = 1;
-    static const int16_t scan_range_one_way = 80;
+
     for (;;)
     {
         // LEDC_TIMER_20_BIT // 2^20 = 1048576, 100 Hz -> T=10ms
@@ -178,6 +177,9 @@ void ultrasonic_sensor_task(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS(300 - DELAY_AFTER_SERVO_MOVEMENT_MS));
 
 #ifdef ENABLE_SERVO_MOVEMENT
+        static int8_t angle_dir = 1;
+        static const int16_t scan_range_one_way = 80;
+        
         angle += 20 * angle_dir;
 
         // if (angle >= SERVO_MAX_DEGREE)
