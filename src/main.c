@@ -30,16 +30,16 @@ static inline void init_ir_gpio()
 }
 
 // Define motor control output range
-#define MOTOR_MAX 0.93
+#define MOTOR_MAX 0.87
 #define MOTOR_MIN -1.0
-#define MOTOR_START_THRESHOLD 0.55
+#define MOTOR_START_THRESHOLD 0.5
 
 void line_follow(uint8_t left_sensor, uint8_t center_sensor, uint8_t right_sensor, double *left_motor, double *right_motor)
 {
     *left_motor = 0.0;
     *right_motor = 0.0;
 
-    double base_speed = 0.68; // Base speed for straight movement
+    double base_speed = 0.64; // Base speed for straight movement
     double turn_speed = 0.5;  // Additional speed for turning
 
     if (center_sensor && !left_sensor && !right_sensor)
@@ -86,7 +86,8 @@ void line_follow(uint8_t left_sensor, uint8_t center_sensor, uint8_t right_senso
     // Due to imperfections have to increase control signal for right motor
     // in order to allow robot going relatively straight
     // *right_motor += 0.12;
-    *right_motor += 0.04;
+    *right_motor -= 0.05;
+    *left_motor += 0.05;
 
     if (*left_motor > MOTOR_MAX)
         *left_motor = MOTOR_MAX;
@@ -142,6 +143,7 @@ void app_main()
 
     TickType_t xlast_wake_time = xTaskGetTickCount();
     mission_state_t mission_state = MISSION_STATE_IDLE;
+    mission_state_turn_dir_t turn_dir = MISSION_STATE_TURN_DIR_LEFT;
     uint32_t ir_l_history = 0, ir_c_history = 0, ir_r_history = 0;
     for (;;)
     {
@@ -186,20 +188,22 @@ void app_main()
         // Forward checking max 100 ms
         if (mission_state != MISSION_STATE_TURN)
         {
-            if (N_BITS_ONES_N_ZEROS(ir_c_history, 0b1111111, 5, 5))
+            if (N_BITS_ONES_N_ZEROS(ir_c_history, 0xFF, 5, 8))
             {
                 ESP_LOGI(TAG, "Center outta the line!");
-                if (N_BITS_ONES_N_ZEROS(ir_l_history, 0b1111111, 4, 2))
+                if (N_BITS_ONES_N_ZEROS(ir_l_history, 0b1111111, 3, 4))
                 {
                     ESP_LOGI(TAG, "Left outta the line ASWELL! Assuming LEFT turn is met!");
                     mission_state = MISSION_STATE_TURN;
+                    turn_dir = MISSION_STATE_TURN_DIR_LEFT;
                     ir_c_history = ir_l_history = ir_r_history = 0;
                 }
-                else if (N_BITS_ONES_N_ZEROS(ir_r_history, 0b1111111, 3, 2))
+                else if (N_BITS_ONES_N_ZEROS(ir_r_history, 0b1111111, 3, 4))
                 {
                     ESP_LOGI(TAG, "Right outta the line ASWELL! Assuming RIGHT turn is met!");
-                    // mission_state = MISSION_STATE_TURN;
-                    // ir_c_history = ir_l_history = ir_r_history = 0;
+                    mission_state = MISSION_STATE_TURN;
+                    turn_dir = MISSION_STATE_TURN_DIR_RIGHT;
+                    ir_c_history = ir_l_history = ir_r_history = 0;
                 }
             }
         }
@@ -214,7 +218,7 @@ void app_main()
             // ESP_LOGI(TAG, "MISSION_STATE_FOLLOW_LINE");
             line_follow(ir_l_history & 0x01, ir_c_history & 0x01, ir_r_history & 0x01,
                         &motors_control.speed_cmd.left, &motors_control.speed_cmd.right);
-            xQueueSend(motors_control_queue_h, &motors_control, pdMS_TO_TICKS(5));
+            xQueueSend(motors_control_queue_h, &motors_control, pdMS_TO_TICKS(0));
             break;
 
         case MISSION_STATE_TURN:
@@ -223,7 +227,8 @@ void app_main()
             send_mot_spd(motors_control_queue_h, &motors_control, -0.8, -0.9);
             vTaskDelay(pdMS_TO_TICKS(100));
             ///////////////////////////////////////
-            send_mot_spd(motors_control_queue_h, &motors_control, -1.0, 1.0);
+            int8_t sign = turn_dir == MISSION_STATE_TURN_DIR_LEFT ? -1 : 1;
+            send_mot_spd(motors_control_queue_h, &motors_control, sign*1.0, -sign*1.0);
             vTaskDelay(pdMS_TO_TICKS(470));
             send_mot_spd(motors_control_queue_h, &motors_control, 0.0, 0.0);
             vTaskDelay(pdMS_TO_TICKS(100));

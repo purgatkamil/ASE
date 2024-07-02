@@ -43,4 +43,10 @@ typedef enum
     MISSION_STATE_STOP
 } mission_state_t;
 
+typedef enum 
+{
+    MISSION_STATE_TURN_DIR_LEFT = 0,
+    MISSION_STATE_TURN_DIR_RIGHT
+} mission_state_turn_dir_t;
+
 #endif
