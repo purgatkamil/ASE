@@ -36,15 +36,11 @@ typedef struct
 
 typedef enum
 {
-    IR_ISR_GPIO_BOT_LEFT_ID = 0u,
-    IR_ISR_GPIO_BOT_CENTER_ID = 1u,
-    IR_ISR_GPIO_BOT_RIGHT_ID = 2u,
-} ir_isr_gpio_id;
-
-typedef struct
-{
-    uint8_t gpio_id;
-    gpio_num_t gpio_num;
-} ir_isr_arg_t;
+    MISSION_STATE_IDLE = 0,
+    MISSION_STATE_FOLLOW_LINE,
+    MISSION_STATE_AVOID_OBSTACLE,
+    MISSION_STATE_TURN,
+    MISSION_STATE_STOP
+} mission_state_t;
 
 #endif
