@@ -19,7 +19,7 @@ typedef struct
 typedef struct
 {
     motors_speed_t speed_cmd;
-    uint8_t cmd_flags;
+    uint8_t        cmd_flags;
 } motors_control_msg_t;
 
 typedef enum

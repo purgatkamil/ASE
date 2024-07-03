@@ -6,9 +6,9 @@
 #include <driver/gpio.h>
 #include <esp_log.h>
 
-#include "helpers.h"
-#include "ase_typedefs.h"
 #include "ase_config.h"
+#include "ase_typedefs.h"
+#include "helpers.h"
 
 typedef enum
 {
@@ -19,11 +19,11 @@ typedef enum
 
 typedef struct
 {
-    QueueHandle_t mot_cmd_q_handle;
-    motors_control_msg_t* mot_ctrl_msg;
-    TaskHandle_t main_task_h;
+    QueueHandle_t         mot_cmd_q_handle;
+    motors_control_msg_t *mot_ctrl_msg;
+    TaskHandle_t          main_task_h;
 } line_follower_task_context_t;
 
-void line_follower_task(void* pvParameters);
+void line_follower_task(void *pvParameters);
 
 #endif

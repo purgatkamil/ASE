@@ -1,15 +1,14 @@
 #ifndef HELPERS_H
 #define HELPERS_H
 
-#include "freertos/FreeRTOS.h"
-#include "ase_typedefs.h"
 #include "ase_config.h"
 #include "ase_typedefs.h"
+#include "freertos/FreeRTOS.h"
 
 // Bitwise operations macros to easy
 // set flags in motor control structure
-#define SET_BIT(var, mask) ((var) |= (mask))
-#define CLEAR_BIT(var, mask) ((var) &= ~(mask))
+#define SET_BIT(var, mask)    ((var) |= (mask))
+#define CLEAR_BIT(var, mask)  ((var) &= ~(mask))
 #define IS_BIT_SET(var, mask) (((var) & (mask)) != 0)
 
 #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
@@ -51,13 +50,13 @@ static inline void sonar_motors_q_ok_or_abort(QueueHandle_t sonar_q, QueueHandle
 #define GET_LSB(var) var & 0x01
 
 static inline BaseType_t send_mot_spd(
-    QueueHandle_t q,
+    QueueHandle_t         q,
     motors_control_msg_t *mc,
-    double spdLeft,
-    double spdRight,
-    TickType_t q_wait_ticks)
+    double                spdLeft,
+    double                spdRight,
+    TickType_t            q_wait_ticks)
 {
-    mc->speed_cmd.left = spdLeft;
+    mc->speed_cmd.left  = spdLeft;
     mc->speed_cmd.right = spdRight;
     return xQueueSend(q, mc, q_wait_ticks);
 }

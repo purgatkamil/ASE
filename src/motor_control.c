@@ -18,11 +18,11 @@ static void create_tim_oper(mcpwm_timer_handle_t *tim_h, mcpwm_oper_handle_t *op
 {
     ESP_LOGI(MOTOR_CONTROL_LOG_TAG, "Begin of MCPWM timer config");
     mcpwm_timer_config_t mcpwm_timer_conf = {
-        .group_id = 0,
-        .clk_src = MCPWM_TIMER_CLK_SRC_DEFAULT,
+        .group_id      = 0,
+        .clk_src       = MCPWM_TIMER_CLK_SRC_DEFAULT,
         .resolution_hz = MCPWM_RESOLUTION_HZ,
-        .count_mode = MCPWM_TIMER_COUNT_MODE_UP,
-        .period_ticks = MCPWM_PERIOD_TICKS,
+        .count_mode    = MCPWM_TIMER_COUNT_MODE_UP,
+        .period_ticks  = MCPWM_PERIOD_TICKS,
     };
 
     ESP_ERROR_CHECK(mcpwm_new_timer(&mcpwm_timer_conf, tim_h));
@@ -66,14 +66,14 @@ static void conf_mcpwm_gen_cmp(mcpwm_oper_handle_t oper, mcpwm_cmpr_handle_t *cm
 static inline void setup_motors_dir_gpio()
 {
     static gpio_config_t io_conf = {
-        .intr_type = GPIO_INTR_DISABLE,
-        .mode = GPIO_MODE_OUTPUT,
+        .intr_type    = GPIO_INTR_DISABLE,
+        .mode         = GPIO_MODE_OUTPUT,
         .pin_bit_mask = (1ULL << MOTOR_LEFT_IN1_GPIO) |
                         (1ULL << MOTOR_LEFT_IN2_GPIO) |
                         (1ULL << MOTOR_RIGHT_IN1_GPIO) |
                         (1ULL << MOTOR_RIGHT_IN2_GPIO),
         .pull_down_en = 0,
-        .pull_up_en = 0};
+        .pull_up_en   = 0};
     gpio_config(&io_conf);
 }
 
@@ -107,10 +107,10 @@ static void set_dir_control_based(double control, gpio_num_t IN1, gpio_num_t IN2
 void motor_control_task(void *pvParameters)
 {
     mcpwm_timer_handle_t tim_h = NULL;
-    mcpwm_oper_handle_t oper = NULL;
+    mcpwm_oper_handle_t  oper  = NULL;
     create_tim_oper(&tim_h, &oper);
 
-    mcpwm_cmpr_handle_t cmp_mleft_h = NULL;
+    mcpwm_cmpr_handle_t cmp_mleft_h  = NULL;
     mcpwm_cmpr_handle_t cmp_mright_h = NULL;
 
     conf_mcpwm_gen_cmp(oper, &cmp_mleft_h, MOTOR_LEFT_EN_GPIO);
@@ -122,7 +122,7 @@ void motor_control_task(void *pvParameters)
 
     motors_control_msg_t motors_control = {
         .speed_cmd = {
-            .left = 0.0f,
+            .left  = 0.0f,
             .right = 0.0f}};
     CLEAR_BIT(motors_control.cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);
 

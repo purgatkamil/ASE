@@ -1,18 +1,18 @@
 #include "bluetooth_com.h"
 
-#define BT_COM_NOTIF_CON_STATE_INDEX (UBaseType_t)0u
+#define BT_COM_NOTIF_CON_STATE_INDEX   (UBaseType_t)0u
 #define BT_COM_NOTIF_WRITE_READY_INDEX (UBaseType_t)1u
 
-static const esp_spp_mode_t esp_spp_mode = ESP_SPP_MODE_CB;
-static const bool esp_spp_enable_l2cap_ertm = true;
+static const esp_spp_mode_t esp_spp_mode              = ESP_SPP_MODE_CB;
+static const bool           esp_spp_enable_l2cap_ertm = true;
 
-static const esp_spp_sec_t sec_mask = ESP_SPP_SEC_AUTHENTICATE;
+static const esp_spp_sec_t  sec_mask   = ESP_SPP_SEC_AUTHENTICATE;
 static const esp_spp_role_t role_slave = ESP_SPP_ROLE_SLAVE;
 
 static QueueHandle_t bt_tosend_h;
 static QueueHandle_t bt_rcv_h;
-static uint32_t bt_con_handle;
-static TaskHandle_t bt_task_handle;
+static uint32_t      bt_con_handle;
+static TaskHandle_t  bt_task_handle;
 
 static char *bda2str(uint8_t *bda, char *str, size_t size)
 {
@@ -123,8 +123,8 @@ void bluetooth_com_task(void *pvParameters)
 {
     bt_task_handle = xTaskGetCurrentTaskHandle();
 
-    char bda_str[18] = {0};
-    esp_err_t ret = nvs_flash_init();
+    char      bda_str[18] = {0};
+    esp_err_t ret         = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -138,8 +138,8 @@ void bluetooth_com_task(void *pvParameters)
     // Receive messaging queues from param
     ///////////////////////////////////////
     bt_com_task_ctx_t *bt_ctx = (bt_com_task_ctx_t *)pvParameters;
-    bt_rcv_h = bt_ctx->q_rcv_h;
-    bt_tosend_h = bt_ctx->q_tosend_h;
+    bt_rcv_h                  = bt_ctx->q_rcv_h;
+    bt_tosend_h               = bt_ctx->q_tosend_h;
     ///////////////////////////////////////
 
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
@@ -156,7 +156,7 @@ void bluetooth_com_task(void *pvParameters)
     }
 
     esp_bluedroid_config_t bluedroid_cfg = BT_BLUEDROID_INIT_CONFIG_DEFAULT();
-    bluedroid_cfg.ssp_en = false;
+    bluedroid_cfg.ssp_en                 = false;
     if ((ret = esp_bluedroid_init_with_cfg(&bluedroid_cfg)) != ESP_OK)
     {
         ESP_LOGE(SPP_TAG, "%s initialize bluedroid failed: %s", __func__, esp_err_to_name(ret));
@@ -182,9 +182,9 @@ void bluetooth_com_task(void *pvParameters)
     }
 
     esp_spp_cfg_t bt_spp_cfg = {
-        .mode = esp_spp_mode,
+        .mode              = esp_spp_mode,
         .enable_l2cap_ertm = esp_spp_enable_l2cap_ertm,
-        .tx_buffer_size = 0, /* Only used for ESP_SPP_MODE_VFS mode */
+        .tx_buffer_size    = 0, /* Only used for ESP_SPP_MODE_VFS mode */
     };
     if ((ret = esp_spp_enhanced_init(&bt_spp_cfg)) != ESP_OK)
     {
@@ -198,8 +198,8 @@ void bluetooth_com_task(void *pvParameters)
 
     ESP_LOGI(SPP_TAG, "Own address:[%s]", bda2str((uint8_t *)esp_bt_dev_get_address(), bda_str, sizeof(bda_str)));
 
-    bt_con_status_t con_st = 0;
-    uint32_t con_stat_notif = 0;
+    bt_con_status_t     con_st         = 0;
+    uint32_t            con_stat_notif = 0;
     static bt_com_msg_t tosend_msg;
     for (;;)
     {
@@ -233,7 +233,7 @@ void bluetooth_com_task(void *pvParameters)
                 xTaskNotifyWaitIndexed(BT_COM_NOTIF_WRITE_READY_INDEX,
                                        0x00, ULONG_MAX, &write_ready, portMAX_DELAY) == pdTRUE)
             {
-                
+
                 ESP_ERROR_CHECK(
                     esp_spp_write(bt_con_handle, tosend_msg.len, tosend_msg.data));
                 write_ready = 0;

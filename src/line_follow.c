@@ -3,40 +3,40 @@
 static void line_follow(uint8_t left_sensor, uint8_t center_sensor, uint8_t right_sensor,
                         double *left_motor, double *right_motor)
 {
-    *left_motor = 0.0;
+    *left_motor  = 0.0;
     *right_motor = 0.0;
 
     double base_speed = 0.6; // Base speed for straight movement
-    double turn_speed = 0.5;  // Additional speed for turning
+    double turn_speed = 0.5; // Additional speed for turning
 
     if (center_sensor && !left_sensor && !right_sensor)
     {
         // Go straight
-        *left_motor = base_speed;
+        *left_motor  = base_speed;
         *right_motor = base_speed;
     }
     else if (left_sensor && !center_sensor && !right_sensor)
     {
         // Turn left
-        *left_motor = base_speed - turn_speed;
+        *left_motor  = base_speed - turn_speed;
         *right_motor = base_speed + turn_speed;
     }
     else if (right_sensor && !center_sensor && !left_sensor)
     {
         // Turn right
-        *left_motor = base_speed + turn_speed;
+        *left_motor  = base_speed + turn_speed;
         *right_motor = base_speed - turn_speed;
     }
     else if (left_sensor && center_sensor && !right_sensor)
     {
         // Slight left adjustment
-        *left_motor = base_speed - turn_speed / 2;
+        *left_motor  = base_speed - turn_speed / 2;
         *right_motor = base_speed + turn_speed / 2;
     }
     else if (right_sensor && center_sensor && !left_sensor)
     {
         // Slight right adjustment
-        *left_motor = base_speed + turn_speed / 2;
+        *left_motor  = base_speed + turn_speed / 2;
         *right_motor = base_speed - turn_speed / 2;
     }
     else if (left_sensor && right_sensor)
@@ -47,7 +47,7 @@ static void line_follow(uint8_t left_sensor, uint8_t center_sensor, uint8_t righ
     {
         // Go straight if line is between sensors
         *right_motor = base_speed;
-        *left_motor = base_speed;
+        *left_motor  = base_speed;
     }
 
     // Due to imperfections in the motors in order to allow robot going relatively straight
@@ -78,30 +78,32 @@ static void line_follow(uint8_t left_sensor, uint8_t center_sensor, uint8_t righ
 static inline void init_ir_gpio()
 {
     gpio_config_t io_conf = {
-        .intr_type = GPIO_INTR_DISABLE,
-        .mode = GPIO_MODE_INPUT,
+        .intr_type    = GPIO_INTR_DISABLE,
+        .mode         = GPIO_MODE_INPUT,
         .pin_bit_mask = (1ULL << IR_SENSOR_BOTTOM_LEFT_GPIO) |
                         (1ULL << IR_SENSOR_BOTTOM_CENTER_GPIO) |
                         (1ULL << IR_SENSOR_BOTTOM_RIGHT_GPIO),
         .pull_down_en = 0,
-        .pull_up_en = 1};
+        .pull_up_en   = 1};
 
     gpio_config(&io_conf);
 }
 
 void line_follower_task(void *pvParameters)
 {
-    TickType_t xlast_wake_time = xTaskGetTickCount();
-    TickType_t last_turn_time = 0;
-    line_follower_task_context_t *lf_ctx = (line_follower_task_context_t *)pvParameters;
-    motors_control_msg_t *mc = lf_ctx->mot_ctrl_msg;
+    TickType_t                    xlast_wake_time = xTaskGetTickCount();
+    TickType_t                    last_turn_time  = 0;
+    line_follower_task_context_t *lf_ctx          = (line_follower_task_context_t *)pvParameters;
+    motors_control_msg_t         *mc              = lf_ctx->mot_ctrl_msg;
 
     init_ir_gpio();
 
-    line_follower_dir_t movement_dir = LINE_FOLLOWER_DIR_STRAIGHT;
-    uint32_t ir_l_history = 0, ir_c_history = 0, ir_r_history = 0;
-    uint32_t orchestrator_notif_val = 0;
-    uint8_t active = 0;
+    line_follower_dir_t movement_dir           = LINE_FOLLOWER_DIR_STRAIGHT;
+    uint32_t            ir_l_history           = 0;
+    uint32_t            ir_c_history           = 0;
+    uint32_t            ir_r_history           = 0;
+    uint32_t            orchestrator_notif_val = 0;
+    uint8_t             active                 = 0;
     for (;;)
     {
         if (xTaskNotifyWait(0x00, ULONG_MAX, &orchestrator_notif_val, pdMS_TO_TICKS(0)) == pdTRUE)
@@ -144,19 +146,19 @@ void line_follower_task(void *pvParameters)
                     {
                         ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center, left] IR assumed to have crossed the line - turning LEFT");
                         movement_dir = LINE_FOLLOWER_DIR_LEFT;
-                        _turning = 1;
+                        _turning     = 1;
                     }
                     else if (N_BITS_ONES_N_ZEROS(ir_r_history, 0b1111111, 3, 4))
                     {
                         ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center, right] IR assumed to have crossed the line - turning RIGHT");
                         movement_dir = LINE_FOLLOWER_DIR_RIGHT;
-                        _turning = 1;
+                        _turning     = 1;
                     }
 
                     if (_turning)
                     {
                         ir_c_history = ir_l_history = ir_r_history = 0;
-                        last_turn_time = xTaskGetTickCount();
+                        last_turn_time                             = xTaskGetTickCount();
                     }
                 }
             }

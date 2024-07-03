@@ -9,9 +9,9 @@
 
 #include <math.h>
 
+#include "ase_config.h"
 #include "ase_typedefs.h"
 #include "helpers.h"
-#include "ase_config.h"
 
 void motor_control_task(void *pvParameters);
 

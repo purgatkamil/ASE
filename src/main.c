@@ -1,16 +1,16 @@
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/task.h"
 
 #include <driver/gpio.h>
 
+#include "ase_config.h"
+#include "ase_typedefs.h"
+#include "bluetooth_com.h"
+#include "helpers.h"
+#include "line_follow.h"
 #include "motor_control.h"
 #include "ultrasonic_sensor.h"
-#include "line_follow.h"
-#include "bluetooth_com.h"
-#include "ase_typedefs.h"
-#include "helpers.h"
-#include "ase_config.h"
 
 //////////////////////// HELPER MACROS ////////////////////////////////////////////////////////
 #define MOTORS_CMD(enable, left, right, d)                                                    \
@@ -42,11 +42,11 @@ static int dual_vprintf(const char *fmt, va_list ap)
 
 void app_main()
 {
-    QueueHandle_t sonar_queue_h = xQueueCreate(5, sizeof(ultrasonic_measurement_t));
+    QueueHandle_t sonar_queue_h          = xQueueCreate(5, sizeof(ultrasonic_measurement_t));
     QueueHandle_t motors_control_queue_h = xQueueCreate(10, sizeof(motors_control_msg_t));
     sonar_motors_q_ok_or_abort(sonar_queue_h, motors_control_queue_h, MAIN_TASK_LOG_TAG);
     static QueueHandle_t bt_rcv_h;
-    bt_rcv_h = xQueueCreate(5, sizeof(bt_com_msg_t));
+    bt_rcv_h    = xQueueCreate(5, sizeof(bt_com_msg_t));
     bt_tosend_h = xQueueCreate(35, sizeof(bt_com_msg_t));
 
 #ifdef LOG_OVER_BLUETOOTH
@@ -58,21 +58,21 @@ void app_main()
 #endif
 
     ultrasonic_measurement_t sonar_notif = {
-        .angle = 0,
+        .angle    = 0,
         .distance = 0.0f};
 
     motors_control_msg_t motors_control = {
         .speed_cmd = {
-            .left = 0.85f,
+            .left  = 0.85f,
             .right = 0.85f}};
 
     line_follower_task_context_t lf_ctx = {
         .mot_cmd_q_handle = motors_control_queue_h,
-        .mot_ctrl_msg = &motors_control,
-        .main_task_h = xTaskGetCurrentTaskHandle()};
+        .mot_ctrl_msg     = &motors_control,
+        .main_task_h      = xTaskGetCurrentTaskHandle()};
 
     bt_com_task_ctx_t bt_ctx = {
-        .q_rcv_h = bt_rcv_h,
+        .q_rcv_h    = bt_rcv_h,
         .q_tosend_h = bt_tosend_h};
 
     static TaskHandle_t lf_task_h;
@@ -84,8 +84,8 @@ void app_main()
     xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, (void *)&bt_ctx, 3, NULL, 0);
     /////////////////////////////////////////////////////////////////////////////////////
 
-    mission_state_t mission_state = MISSION_STATE_IDLE;
-    uint32_t any_bottom_ir_active = 0;
+    mission_state_t     mission_state        = MISSION_STATE_IDLE;
+    uint32_t            any_bottom_ir_active = 0;
     static bt_com_msg_t bt_msg_rcv;
     for (;;)
     {

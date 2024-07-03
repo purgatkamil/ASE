@@ -3,19 +3,19 @@
 static bool ultrasonic_echo_callback(mcpwm_cap_channel_handle_t cap_chan, const mcpwm_capture_event_data_t *edata, void *user_data)
 {
     static uint32_t cap_val_begin_of_sample = 0;
-    static uint32_t cap_val_end_of_sample = 0;
-    TaskHandle_t task_to_notify = (TaskHandle_t)user_data;
-    BaseType_t high_task_wakeup = pdFALSE;
+    static uint32_t cap_val_end_of_sample   = 0;
+    TaskHandle_t    task_to_notify          = (TaskHandle_t)user_data;
+    BaseType_t      high_task_wakeup        = pdFALSE;
 
     if (edata->cap_edge == MCPWM_CAP_EDGE_POS)
     {
         cap_val_begin_of_sample = edata->cap_value;
-        cap_val_end_of_sample = cap_val_begin_of_sample;
+        cap_val_end_of_sample   = cap_val_begin_of_sample;
     }
     else
     {
         cap_val_end_of_sample = edata->cap_value;
-        uint32_t ticks_diff = cap_val_end_of_sample - cap_val_begin_of_sample;
+        uint32_t ticks_diff   = cap_val_end_of_sample - cap_val_begin_of_sample;
         xTaskNotifyFromISR(task_to_notify, ticks_diff, eSetValueWithOverwrite, &high_task_wakeup);
     }
 
@@ -29,20 +29,20 @@ static void ledc_servo_sonar_init(void)
     /////////////////
     ESP_LOGI(SONAR_SERVO_LOG_TAG, "Initializing ultrasonic LEDC timer");
     ledc_timer_config_t sonar_ledc_timer = {
-        .speed_mode = SONAR_LEDC_MODE,
+        .speed_mode      = SONAR_LEDC_MODE,
         .duty_resolution = SONAR_LEDC_DUTY_RES,
-        .timer_num = SONAR_LEDC_TIMER,
-        .freq_hz = SONAR_LEDC_FREQUENCY,
-        .clk_cfg = LEDC_AUTO_CLK};
+        .timer_num       = SONAR_LEDC_TIMER,
+        .freq_hz         = SONAR_LEDC_FREQUENCY,
+        .clk_cfg         = LEDC_AUTO_CLK};
     ESP_ERROR_CHECK(ledc_timer_config(&sonar_ledc_timer));
 
     ESP_LOGI(SONAR_SERVO_LOG_TAG, "Initializing servo LEDC timer");
     ledc_timer_config_t servo_ledc_timer = {
-        .speed_mode = SERVO_LEDC_MODE,
+        .speed_mode      = SERVO_LEDC_MODE,
         .duty_resolution = SERVO_LEDC_DUTY_RES,
-        .timer_num = SERVO_LEDC_TIMER,
-        .freq_hz = SERVO_LEDC_FREQUENCY,
-        .clk_cfg = LEDC_AUTO_CLK};
+        .timer_num       = SERVO_LEDC_TIMER,
+        .freq_hz         = SERVO_LEDC_FREQUENCY,
+        .clk_cfg         = LEDC_AUTO_CLK};
     ESP_ERROR_CHECK(ledc_timer_config(&servo_ledc_timer));
 
     ///////////////////
@@ -51,51 +51,51 @@ static void ledc_servo_sonar_init(void)
     ESP_LOGI(SONAR_SERVO_LOG_TAG, "Initializing LEDC ultrasonic trigger channel (output at GPIO %d)", ULTRASONIC_TRIG_GPIO);
     ledc_channel_config_t sonar_ledc_channel = {
         .speed_mode = SONAR_LEDC_MODE,
-        .channel = SONAR_LEDC_CHANNEL,
-        .timer_sel = SONAR_LEDC_TIMER,
-        .intr_type = LEDC_INTR_DISABLE,
-        .gpio_num = ULTRASONIC_TRIG_GPIO,
-        .duty = SONAR_LEDC_DUTY,
-        .hpoint = 0};
+        .channel    = SONAR_LEDC_CHANNEL,
+        .timer_sel  = SONAR_LEDC_TIMER,
+        .intr_type  = LEDC_INTR_DISABLE,
+        .gpio_num   = ULTRASONIC_TRIG_GPIO,
+        .duty       = SONAR_LEDC_DUTY,
+        .hpoint     = 0};
     ESP_ERROR_CHECK(ledc_channel_config(&sonar_ledc_channel));
 
     ESP_LOGI(SONAR_SERVO_LOG_TAG, "Initializing LEDC servo channel (output at GPIO %d)", SERVO_PWM_GPIO);
     ledc_channel_config_t servo_ledc_channel = {
         .speed_mode = SERVO_LEDC_MODE,
-        .channel = SERVO_LEDC_CHANNEL,
-        .timer_sel = SERVO_LEDC_TIMER,
-        .intr_type = LEDC_INTR_DISABLE,
-        .gpio_num = SERVO_PWM_GPIO,
-        .duty = 0,
-        .hpoint = 0};
+        .channel    = SERVO_LEDC_CHANNEL,
+        .timer_sel  = SERVO_LEDC_TIMER,
+        .intr_type  = LEDC_INTR_DISABLE,
+        .gpio_num   = SERVO_PWM_GPIO,
+        .duty       = 0,
+        .hpoint     = 0};
     ESP_ERROR_CHECK(ledc_channel_config(&servo_ledc_channel));
 }
 
 static void inline init_start_mcpwm_capture()
 {
     ESP_LOGI(SONAR_SERVO_LOG_TAG, "Install capture timer");
-    mcpwm_cap_timer_handle_t cap_timer = NULL;
+    mcpwm_cap_timer_handle_t     cap_timer      = NULL;
     mcpwm_capture_timer_config_t cap_timer_conf = {
         .group_id = 0,
-        .clk_src = MCPWM_CAPTURE_CLK_SRC_DEFAULT,
+        .clk_src  = MCPWM_CAPTURE_CLK_SRC_DEFAULT,
     };
     ESP_ERROR_CHECK(mcpwm_new_capture_timer(&cap_timer_conf, &cap_timer));
 
-    mcpwm_cap_channel_handle_t cap_chan = NULL;
+    mcpwm_cap_channel_handle_t     cap_chan    = NULL;
     mcpwm_capture_channel_config_t cap_ch_conf = {
         .gpio_num = ULTRASONIC_ECHO_GPIO,
         .prescale = 1,
-        .flags = {
-            .pos_edge = true,
-            .neg_edge = true,
-            .pull_up = false,
-            .pull_down = true}};
+        .flags    = {
+               .pos_edge  = true,
+               .neg_edge  = true,
+               .pull_up   = false,
+               .pull_down = true}};
     ESP_ERROR_CHECK(mcpwm_new_capture_channel(cap_timer, &cap_ch_conf, &cap_chan));
 
     ESP_LOGI(SONAR_SERVO_LOG_TAG, "Register capture callback");
-    TaskHandle_t cur_task = xTaskGetCurrentTaskHandle();
-    mcpwm_capture_event_callbacks_t cbs = {
-        .on_cap = ultrasonic_echo_callback,
+    TaskHandle_t                    cur_task = xTaskGetCurrentTaskHandle();
+    mcpwm_capture_event_callbacks_t cbs      = {
+             .on_cap = ultrasonic_echo_callback,
     };
 
     ESP_ERROR_CHECK(mcpwm_capture_channel_register_event_callbacks(cap_chan, &cbs, cur_task));
@@ -130,7 +130,7 @@ void ultrasonic_sensor_task(void *pvParameters)
 
     uint32_t tof_ticks;
     uint32_t servo_duty = 0;
-    int16_t angle = 0;
+    int16_t  angle      = 0;
 
     for (;;)
     {
@@ -160,7 +160,7 @@ void ultrasonic_sensor_task(void *pvParameters)
                 continue;
             }
 
-            sonar_meas.angle = angle;
+            sonar_meas.angle    = angle;
             sonar_meas.distance = distance;
 
             ESP_LOGI(SONAR_SERVO_LOG_TAG, "Ultrasonic measurement at angle %d deg: %fcm",
@@ -176,7 +176,7 @@ void ultrasonic_sensor_task(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS(300));
 
 #ifdef ENABLE_SERVO_MOVEMENT
-        static int8_t angle_dir = 1;
+        static int8_t        angle_dir          = 1;
         static const int16_t scan_range_one_way = 80;
 
         angle += 20 * angle_dir;
