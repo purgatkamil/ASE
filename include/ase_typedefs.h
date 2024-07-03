@@ -4,12 +4,6 @@
 // For types availability
 #include "freertos/FreeRTOS.h"
 
-// Bitwise operations macros to easy
-// set flags in motor control structure
-#define SET_BIT(var, mask) ((var) |= (mask))
-#define CLEAR_BIT(var, mask) ((var) &= ~(mask))
-#define IS_BIT_SET(var, mask) (((var) & (mask)) != 0)
-
 typedef enum
 {
     MOTORS_CONTROL_FLAGS_ENABLE = (1 << 0),

@@ -1,5 +1,8 @@
 #include "bluetooth_com.h"
 
+#define BT_COM_NOTIF_CON_STATE_INDEX (UBaseType_t)0u
+#define BT_COM_NOTIF_WRITE_READY_INDEX (UBaseType_t)1u
+
 static const esp_spp_mode_t esp_spp_mode = ESP_SPP_MODE_CB;
 static const bool esp_spp_enable_l2cap_ertm = true;
 

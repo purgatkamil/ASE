@@ -1,7 +1,5 @@
 #include "line_follow.h"
 
-static const char *TAG = "line-follower";
-
 static void line_follow(uint8_t left_sensor, uint8_t center_sensor, uint8_t right_sensor,
                         double *left_motor, double *right_motor)
 {
@@ -54,8 +52,8 @@ static void line_follow(uint8_t left_sensor, uint8_t center_sensor, uint8_t righ
 
     // Due to imperfections in the motors in order to allow robot going relatively straight
     // the control signals have to be adjusted by hand based on experiments
-    *right_motor -= 0.03;
-    *left_motor += 0.03;
+    *right_motor -= 0.02;
+    *left_motor += 0.02;
 
     if (*left_motor > MOTOR_MAX)
         *left_motor = MOTOR_MAX;
@@ -139,18 +137,18 @@ void line_follower_task(void *pvParameters)
             {
                 if (N_BITS_ONES_N_ZEROS(ir_c_history, 0xFF, 5, 8)) // center IR crossed the line
                 {
-                    ESP_LOGI(TAG, "[center] IR assumed to have crossed the line");
+                    ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center] IR assumed to have crossed the line");
                     static uint8_t _turning;
                     _turning = 0;
                     if (N_BITS_ONES_N_ZEROS(ir_l_history, 0b1111111, 3, 4))
                     {
-                        ESP_LOGI(TAG, "[center, left] IR assumed to have crossed the line - turning LEFT");
+                        ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center, left] IR assumed to have crossed the line - turning LEFT");
                         movement_dir = LINE_FOLLOWER_DIR_LEFT;
                         _turning = 1;
                     }
                     else if (N_BITS_ONES_N_ZEROS(ir_r_history, 0b1111111, 3, 4))
                     {
-                        ESP_LOGI(TAG, "[center, right] IR assumed to have crossed the line - turning RIGHT");
+                        ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center, right] IR assumed to have crossed the line - turning RIGHT");
                         movement_dir = LINE_FOLLOWER_DIR_RIGHT;
                         _turning = 1;
                     }
@@ -173,7 +171,7 @@ void line_follower_task(void *pvParameters)
 
             case LINE_FOLLOWER_DIR_LEFT:
             case LINE_FOLLOWER_DIR_RIGHT:
-                ESP_LOGI(TAG, "MISSION_STATE_TURN");
+                ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "MISSION_STATE_TURN");
                 // Before turning, back off a little bit
                 send_mot_spd(lf_ctx->mot_cmd_q_handle, mc, -0.8, -0.9, pdMS_TO_TICKS(0));
                 vTaskDelay(pdMS_TO_TICKS(100));

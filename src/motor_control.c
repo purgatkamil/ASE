@@ -1,24 +1,22 @@
 #include "motor_control.h"
 
-static const char *TAG = "motor-control";
-
 static void enable_start_mcpwm_tim(mcpwm_timer_handle_t tim_h)
 {
-    ESP_LOGI(TAG, "Enable and start MCPWM timer");
+    ESP_LOGI(MOTOR_CONTROL_LOG_TAG, "Enable and start MCPWM timer");
     ESP_ERROR_CHECK(mcpwm_timer_enable(tim_h));
     ESP_ERROR_CHECK(mcpwm_timer_start_stop(tim_h, MCPWM_TIMER_START_NO_STOP));
 }
 
 static void disable_mcpwm_tim(mcpwm_timer_handle_t tim_h)
 {
-    ESP_LOGI(TAG, "Stop and disable MCPWM timer");
+    ESP_LOGI(MOTOR_CONTROL_LOG_TAG, "Stop and disable MCPWM timer");
     mcpwm_timer_start_stop(tim_h, MCPWM_TIMER_START_STOP_FULL);
     ESP_ERROR_CHECK(mcpwm_timer_disable(tim_h));
 }
 
 static void create_tim_oper(mcpwm_timer_handle_t *tim_h, mcpwm_oper_handle_t *oper)
 {
-    ESP_LOGI(TAG, "Begin of MCPWM timer config");
+    ESP_LOGI(MOTOR_CONTROL_LOG_TAG, "Begin of MCPWM timer config");
     mcpwm_timer_config_t mcpwm_timer_conf = {
         .group_id = 0,
         .clk_src = MCPWM_TIMER_CLK_SRC_DEFAULT,
@@ -28,20 +26,20 @@ static void create_tim_oper(mcpwm_timer_handle_t *tim_h, mcpwm_oper_handle_t *op
     };
 
     ESP_ERROR_CHECK(mcpwm_new_timer(&mcpwm_timer_conf, tim_h));
-    ESP_LOGI(TAG, "Created MCPWM timer");
+    ESP_LOGI(MOTOR_CONTROL_LOG_TAG, "Created MCPWM timer");
 
     mcpwm_operator_config_t operator_config = {
         .group_id = 0, // operator must be in the same group to the timer
     };
     ESP_ERROR_CHECK(mcpwm_new_operator(&operator_config, oper));
 
-    ESP_LOGI(TAG, "Connect timer and operator");
+    ESP_LOGI(MOTOR_CONTROL_LOG_TAG, "Connect timer and operator");
     ESP_ERROR_CHECK(mcpwm_operator_connect_timer(*oper, *tim_h));
 }
 
 static void conf_mcpwm_gen_cmp(mcpwm_oper_handle_t oper, mcpwm_cmpr_handle_t *cmp_h, int gpio_num)
 {
-    ESP_LOGI(TAG, "Create comparator and generator from the operator (GPIO %d)", gpio_num);
+    ESP_LOGI(MOTOR_CONTROL_LOG_TAG, "Create comparator and generator from the operator (GPIO %d)", gpio_num);
 
     mcpwm_comparator_config_t comparator_config = {
         .flags = {
@@ -56,7 +54,7 @@ static void conf_mcpwm_gen_cmp(mcpwm_oper_handle_t oper, mcpwm_cmpr_handle_t *cm
     mcpwm_gen_handle_t generator = NULL;
     ESP_ERROR_CHECK(mcpwm_new_generator(oper, &generator_config, &generator));
 
-    ESP_LOGI(TAG, "Set generator action on timer and compare event (GPIO %d)", gpio_num);
+    ESP_LOGI(MOTOR_CONTROL_LOG_TAG, "Set generator action on timer and compare event (GPIO %d)", gpio_num);
     // go high on counter empty
     ESP_ERROR_CHECK(mcpwm_generator_set_action_on_timer_event(generator,
                                                               MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH)));

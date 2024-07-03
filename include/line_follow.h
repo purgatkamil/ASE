@@ -8,18 +8,7 @@
 
 #include "helpers.h"
 #include "ase_typedefs.h"
-
-#define IR_SENSOR_BOTTOM_LEFT_GPIO GPIO_NUM_23
-#define IR_SENSOR_BOTTOM_RIGHT_GPIO GPIO_NUM_22
-#define IR_SENSOR_BOTTOM_CENTER_GPIO GPIO_NUM_35
-
-// Define motor control output range
-#define MOTOR_MAX 0.845
-#define MOTOR_MIN -0.845
-#define MOTOR_START_THRESHOLD 0.45
-
-// Dead time in which robot can not take another 90 deg turn.
-#define TURNING_DEAD_TIME_MS 5000
+#include "ase_config.h"
 
 typedef enum
 {

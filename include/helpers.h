@@ -3,6 +3,14 @@
 
 #include "freertos/FreeRTOS.h"
 #include "ase_typedefs.h"
+#include "ase_config.h"
+#include "ase_typedefs.h"
+
+// Bitwise operations macros to easy
+// set flags in motor control structure
+#define SET_BIT(var, mask) ((var) |= (mask))
+#define CLEAR_BIT(var, mask) ((var) &= ~(mask))
+#define IS_BIT_SET(var, mask) (((var) & (mask)) != 0)
 
 #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
 #define BYTE_TO_BINARY(byte)         \
@@ -25,7 +33,7 @@ static inline int count_n_of_ones(unsigned int u)
     return ((uCount + (uCount >> 3)) & 030707070707) % 63;
 }
 
-static inline void sonar_motors_q_ok_or_abort(QueueHandle_t sonar_q, QueueHandle_t mot_ctr_q, const char* TAG)
+static inline void sonar_motors_q_ok_or_abort(QueueHandle_t sonar_q, QueueHandle_t mot_ctr_q, const char *TAG)
 {
     if (sonar_q == NULL || mot_ctr_q == NULL)
     {
@@ -40,11 +48,7 @@ static inline void sonar_motors_q_ok_or_abort(QueueHandle_t sonar_q, QueueHandle
     ((count_n_of_ones(var & (~((uint32_t)mask))) >= nhigh && \
       (count_n_of_ones((~var) & mask)) >= nlow))
 
-
 #define GET_LSB(var) var & 0x01
-
-// (count_n_of_ones(ir_c_history & (~((uint32_t)0x05))) >= 15 && (count_n_of_ones((~ir_c_history) & 0x05)) >= 4)
-
 
 static inline BaseType_t send_mot_spd(
     QueueHandle_t q,
