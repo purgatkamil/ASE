@@ -8,7 +8,7 @@ static void line_follow(uint8_t left_sensor, uint8_t center_sensor, uint8_t righ
     *left_motor = 0.0;
     *right_motor = 0.0;
 
-    double base_speed = 0.62; // Base speed for straight movement
+    double base_speed = 0.6; // Base speed for straight movement
     double turn_speed = 0.5;  // Additional speed for turning
 
     if (center_sensor && !left_sensor && !right_sensor)
@@ -54,8 +54,8 @@ static void line_follow(uint8_t left_sensor, uint8_t center_sensor, uint8_t righ
 
     // Due to imperfections in the motors in order to allow robot going relatively straight
     // the control signals have to be adjusted by hand based on experiments
-    *right_motor -= 0.05;
-    *left_motor += 0.05;
+    *right_motor -= 0.03;
+    *left_motor += 0.03;
 
     if (*left_motor > MOTOR_MAX)
         *left_motor = MOTOR_MAX;

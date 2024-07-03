@@ -35,7 +35,7 @@
 
 // ESP32 internal buffer has maximum cap of 990 bytes
 // thus more can not be received at once with default configuration
-#define BT_MSG_BUF_SIZE_BYTES 1024
+#define BT_MSG_BUF_SIZE_BYTES 256
 
 #define BT_COM_NOTIF_CON_STATE_INDEX (UBaseType_t)0u
 #define BT_COM_NOTIF_WRITE_READY_INDEX (UBaseType_t)1u

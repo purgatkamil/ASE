@@ -83,7 +83,7 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
         }
         break;
     case ESP_SPP_WRITE_EVT:
-        ESP_LOGI(SPP_TAG, "ESP_SPP_WRITE_EVT (cong=%d)", param->write.cong);
+        // ESP_LOGI(SPP_TAG, "ESP_SPP_WRITE_EVT (cong=%d)", param->write.cong);
         if (param->write.cong == false)
         {
             xTaskNotifyIndexed(bt_task_handle, BT_COM_NOTIF_WRITE_READY_INDEX,
