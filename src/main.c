@@ -9,6 +9,7 @@
 #include "bluetooth_com.h"
 #include "helpers.h"
 #include "line_follow.h"
+#include "meta_detection.h"
 #include "motor_control.h"
 #include "ultrasonic_sensor.h"
 
@@ -42,6 +43,8 @@ static int dual_vprintf(const char *fmt, va_list ap)
 
 void app_main()
 {
+    const TaskHandle_t current_task_h = xTaskGetCurrentTaskHandle();
+    
     QueueHandle_t sonar_queue_h          = xQueueCreate(5, sizeof(ultrasonic_measurement_t));
     QueueHandle_t motors_control_queue_h = xQueueCreate(10, sizeof(motors_control_msg_t));
     sonar_motors_q_ok_or_abort(sonar_queue_h, motors_control_queue_h, MAIN_TASK_LOG_TAG);
@@ -69,7 +72,7 @@ void app_main()
     line_follower_task_context_t lf_ctx = {
         .mot_cmd_q_handle = motors_control_queue_h,
         .mot_ctrl_msg     = &motors_control,
-        .main_task_h      = xTaskGetCurrentTaskHandle()};
+        .main_task_h      = current_task_h};
 
     bt_com_task_ctx_t bt_ctx = {
         .q_rcv_h    = bt_rcv_h,
@@ -78,10 +81,12 @@ void app_main()
     static TaskHandle_t lf_task_h;
 
     ////////////////////////////////// TASKS CREATION //////////////////////////////////
-    xTaskCreate(&motor_control_task, "motor_ctrl", 4096, (void *)motors_control_queue_h, 15, NULL);
-    xTaskCreate(&ultrasonic_sensor_task, "sonar", 4096, (void *)sonar_queue_h, 10, NULL);
-    xTaskCreate(&line_follower_task, "line_follow", 4096, (void *)&lf_ctx, 16, &lf_task_h);
+    // xTaskCreate(&motor_control_task, "motor_ctrl", 4096, (void *)motors_control_queue_h, 15, NULL);
+    // xTaskCreate(&ultrasonic_sensor_task, "sonar", 4096, (void *)sonar_queue_h, 10, NULL);
+    // xTaskCreate(&line_follower_task, "line_follow", 4096, (void *)&lf_ctx, 16, &lf_task_h);
     xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, (void *)&bt_ctx, 3, NULL, 0);
+    xTaskCreatePinnedToCore(&meta_detection_task, "meta-detect", 3048,
+                            (void *)current_task_h, 11, NULL, 0);
     /////////////////////////////////////////////////////////////////////////////////////
 
     mission_state_t     mission_state        = MISSION_STATE_IDLE;
@@ -140,6 +145,12 @@ void app_main()
             xTaskNotify(lf_task_h, LF_STATE_ACTIVE, eSetValueWithOverwrite);
         }
 
+        static uint32_t tmp = 0;
+        if (xTaskNotifyWaitIndexed(1, 0x00, ULONG_MAX, &tmp, pdTICKS_TO_MS(0)) == pdTRUE)
+        {
+            ESP_LOGI(MAIN_TASK_LOG_TAG, "Meta detected!");
+        }
+
         // Triggers for state-specific setup [TODO]
         switch (mission_state)
         {
@@ -168,3 +179,4 @@ void app_main()
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
+//*/
