@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <Button
+        android:id="@+id/connectButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:text="Connect to Bluetooth"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="105dp"
+        android:layout_height="23dp"
+        android:layout_marginStart="150dp"
+        android:layout_marginTop="80dp"
+        android:layout_marginEnd="150dp"
+        android:text="Set Direction"
+        android:textAlignment="center"
+        app:layout_constraintDimensionRatio="w,1:1"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/frameLayout"
+        android:layout_width="451dp"
+        android:layout_height="350dp"
+        android:layout_marginTop="112dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.333"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <Button
+            android:id="@+id/westButton"
+            android:layout_width="64dp"
+            android:layout_height="160dp"
+            android:layout_marginStart="60dp"
+            android:layout_marginTop="80dp"
+            android:background="@drawable/arrow_w"
+            android:text="W"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <Button
+            android:id="@+id/northButton"
+            android:layout_width="160dp"
+            android:layout_height="64dp"
+            android:layout_marginStart="138dp"
+            android:layout_marginEnd="154dp"
+            android:layout_marginBottom="36dp"
+            android:background="@drawable/arrow_n"
+            android:text="N"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="1.0"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <Button
+            android:id="@+id/eastButton"
+            android:layout_width="64dp"
+            android:layout_height="160dp"
+            android:layout_marginTop="80dp"
+            android:layout_marginEnd="76dp"
+            android:background="@drawable/arrow_e"
+            android:text="E"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <Button
+            android:id="@+id/southButton"
+            android:layout_width="160dp"
+            android:layout_height="64dp"
+            android:layout_marginStart="138dp"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="154dp"
+            android:background="@drawable/arrow_s"
+            android:backgroundTint="#C31919"
+            android:hapticFeedbackEnabled="false"
+            android:shadowColor="#FFFFFF"
+            android:text="S"
+            android:textColor="@color/white"
+            android:textColorHighlight="@color/white"
+            android:textColorHint="@color/white"
+            android:textColorLink="#FFFFFF"
+            app:iconTint="@color/material_dynamic_primary50"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="1.0"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:rippleColor="@color/material_dynamic_primary50"
+            app:strokeColor="@color/white" />
+
+        <Button
+            android:id="@+id/startButton"
+            android:layout_width="144dp"
+            android:layout_height="114dp"
+            android:layout_marginStart="144dp"
+            android:layout_marginTop="96dp"
+            android:layout_marginEnd="163dp"
+            android:background="@android:drawable/ic_menu_mylocation"
+            android:radius="50dp"
+            android:shadowColor="#4CAF50"
+            android:text="Start"
+            android:textColor="#306532"
+            android:textColorHighlight="#4CAF50"
+            android:textColorHint="#4CAF50"
+            android:textColorLink="#4CAF50"
+            app:cornerRadius="@null"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:rippleColor="#4CAF50"
+            app:strokeColor="#FFFFFF" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <Button
+        android:id="@+id/sendTimeButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
+        android:layout_marginVertical="16dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="201dp"
+        android:layout_marginEnd="16dp"
+        android:text="Send Current Time"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/frameLayout" />
+
+    <TextView
+        android:id="@+id/receivedMessagesTextView"
+        android:layout_width="350dp"
+        android:layout_height="150dp"
+        android:layout_marginStart="169dp"
+        android:layout_marginTop="9dp"
+        android:layout_marginEnd="168dp"
+        android:background="#e0e0e0"
+        android:padding="8dp"
+        android:text="Received messages will appear here"
+        android:textSize="16sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/sendTimeButton" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
