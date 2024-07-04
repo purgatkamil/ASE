@@ -58,6 +58,8 @@ void app_main()
     // Disable BT_HCI logs as they are truly useless
     esp_log_level_set("BT_HCI", ESP_LOG_NONE);
     esp_log_level_set(SPP_TAG, ESP_LOG_NONE);
+    esp_log_level_set(META_DETECTION_LOG_TAG, ESP_LOG_NONE);
+    esp_log_level_set(SONAR_SERVO_LOG_TAG, ESP_LOG_NONE);
 #endif
 
     ultrasonic_measurement_t sonar_notif = {
@@ -81,9 +83,9 @@ void app_main()
     static TaskHandle_t lf_task_h;
 
     ////////////////////////////////// TASKS CREATION //////////////////////////////////
-    // xTaskCreate(&motor_control_task, "motor_ctrl", 4096, (void *)motors_control_queue_h, 15, NULL);
-    // xTaskCreate(&ultrasonic_sensor_task, "sonar", 4096, (void *)sonar_queue_h, 10, NULL);
-    // xTaskCreate(&line_follower_task, "line_follow", 4096, (void *)&lf_ctx, 16, &lf_task_h);
+    xTaskCreate(&motor_control_task, "motor_ctrl", 4096, (void *)motors_control_queue_h, 15, NULL);
+    xTaskCreate(&ultrasonic_sensor_task, "sonar", 4096, (void *)sonar_queue_h, 10, NULL);
+    xTaskCreate(&line_follower_task, "line_follow", 4096, (void *)&lf_ctx, 16, &lf_task_h);
     xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, (void *)&bt_ctx, 3, NULL, 0);
     xTaskCreatePinnedToCore(&meta_detection_task, "meta-detect", 3048,
                             (void *)current_task_h, 11, NULL, 0);
@@ -130,6 +132,7 @@ void app_main()
                 {
                     // Enable line-following mode
                     mission_state = MISSION_STATE_FOLLOW_LINE;
+                    MOTORS_CMD(true, 0.8, 0.8, pdMS_TO_TICKS(0));
                 }
                 else if (m == 3)
                 {
@@ -161,6 +164,7 @@ void app_main()
         case MISSION_STATE_FOLLOW_LINE:
             // If robot was stopped, give it a little go-ahead as burst of
             // high control value to tear the static friction [TODO]
+            xTaskNotify(lf_task_h, LF_STATE_ACTIVE, eSetValueWithOverwrite);
             break;
 
         case MISSION_STATE_STOP:

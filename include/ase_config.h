@@ -53,9 +53,9 @@
 #define IR_SENSOR_BOTTOM_CENTER_GPIO GPIO_NUM_35
 
 // Define motor control output range
-#define MOTOR_MAX             0.9
+#define MOTOR_MAX             0.8
 #define MOTOR_MIN             -0.9
-#define MOTOR_START_THRESHOLD 0.3
+#define MOTOR_START_THRESHOLD 0.4
 
 // Dead time in which robot can not take another 90 deg turn.
 // Units of time are milliseconds.

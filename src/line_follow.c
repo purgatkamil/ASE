@@ -52,8 +52,8 @@ static void line_follow(uint8_t left_sensor, uint8_t center_sensor, uint8_t righ
 
     // Due to imperfections in the motors in order to allow robot going relatively straight
     // the control signals have to be adjusted by hand based on experiments
-    *right_motor -= 0.02;
-    *left_motor += 0.02;
+    *right_motor -= 0.132;
+    *left_motor += 0.132;
 
     if (*left_motor > MOTOR_MAX)
         *left_motor = MOTOR_MAX;
@@ -137,18 +137,18 @@ void line_follower_task(void *pvParameters)
             if (movement_dir == LINE_FOLLOWER_DIR_STRAIGHT &&
                 pdTICKS_TO_MS(xTaskGetTickCount() - last_turn_time) > TURNING_DEAD_TIME_MS)
             {
-                if (N_BITS_ONES_N_ZEROS(ir_c_history, 0xFF, 5, 8)) // center IR crossed the line
+                if (N_BITS_ONES_N_ZEROS(ir_c_history, 0xFF, 6, 8)) // center IR crossed the line
                 {
                     ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center] IR assumed to have crossed the line");
                     static uint8_t _turning;
                     _turning = 0;
-                    if (N_BITS_ONES_N_ZEROS(ir_l_history, 0b1111111, 3, 4))
+                    if (N_BITS_ONES_N_ZEROS(ir_l_history, 0b1111111, 3, 3))
                     {
                         ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center, left] IR assumed to have crossed the line - turning LEFT");
                         movement_dir = LINE_FOLLOWER_DIR_LEFT;
                         _turning     = 1;
                     }
-                    else if (N_BITS_ONES_N_ZEROS(ir_r_history, 0b1111111, 3, 4))
+                    else if (N_BITS_ONES_N_ZEROS(ir_r_history, 0b1111111, 3, 3))
                     {
                         ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center, right] IR assumed to have crossed the line - turning RIGHT");
                         movement_dir = LINE_FOLLOWER_DIR_RIGHT;
@@ -174,14 +174,10 @@ void line_follower_task(void *pvParameters)
             case LINE_FOLLOWER_DIR_LEFT:
             case LINE_FOLLOWER_DIR_RIGHT:
                 ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "MISSION_STATE_TURN");
-                // Before turning, back off a little bit
-                send_mot_spd(lf_ctx->mot_cmd_q_handle, mc, -0.8, -0.9, pdMS_TO_TICKS(0));
-                vTaskDelay(pdMS_TO_TICKS(100));
-                ///////////////////////////////////////
                 int8_t sign = movement_dir == LINE_FOLLOWER_DIR_LEFT ? -1 : 1;
                 send_mot_spd(lf_ctx->mot_cmd_q_handle, mc, sign * 1.0, -sign * 1.0, pdMS_TO_TICKS(0));
-                vTaskDelay(pdMS_TO_TICKS(460));
-                send_mot_spd(lf_ctx->mot_cmd_q_handle, mc, 0.0, 0.0, pdMS_TO_TICKS(0));
+                vTaskDelay(pdMS_TO_TICKS(sign < 0 ? 430 + 80 : 430 + 10));
+                send_mot_spd(lf_ctx->mot_cmd_q_handle, mc, 0.9, 0.9, pdMS_TO_TICKS(0));
                 vTaskDelay(pdMS_TO_TICKS(100));
                 movement_dir = LINE_FOLLOWER_DIR_STRAIGHT;
                 break;
