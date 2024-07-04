@@ -4,6 +4,7 @@
 #include "freertos/FreeRTOS.h"
 
 #include "ultrasonic_sensor.h"
+#include "helpers.h"
 
 #include "ase_config.h"
 

@@ -139,7 +139,7 @@ void line_follower_task(void *pvParameters)
             {
                 if (N_BITS_ONES_N_ZEROS(ir_c_history, 0xFF, 6, 8)) // center IR crossed the line
                 {
-                    ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center] IR assumed to have crossed the line");
+                    // ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center] IR assumed to have crossed the line");
                     static uint8_t _turning;
                     _turning = 0;
                     if (N_BITS_ONES_N_ZEROS(ir_l_history, 0b1111111, 3, 3))
@@ -173,8 +173,9 @@ void line_follower_task(void *pvParameters)
 
             case LINE_FOLLOWER_DIR_LEFT:
             case LINE_FOLLOWER_DIR_RIGHT:
-                ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "MISSION_STATE_TURN");
                 int8_t sign = movement_dir == LINE_FOLLOWER_DIR_LEFT ? -1 : 1;
+                ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "Turning [dir=%s]",
+                         sign < 0 ? "LEFT" : "RIGHT");
                 send_mot_spd(lf_ctx->mot_cmd_q_handle, mc, sign * 1.0, -sign * 1.0, pdMS_TO_TICKS(0));
                 vTaskDelay(pdMS_TO_TICKS(sign < 0 ? 430 + 80 : 430 + 10));
                 send_mot_spd(lf_ctx->mot_cmd_q_handle, mc, 0.9, 0.9, pdMS_TO_TICKS(0));

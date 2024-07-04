@@ -173,7 +173,7 @@ void ultrasonic_sensor_task(void *pvParameters)
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(300));
+        vTaskDelay(pdMS_TO_TICKS(100));
 
 #ifdef ENABLE_SERVO_MOVEMENT
         static int8_t        angle_dir          = 1;

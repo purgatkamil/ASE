@@ -12,6 +12,7 @@
 #include "meta_detection.h"
 #include "motor_control.h"
 #include "obstacle_avoidance.h"
+#include "state_transitions.h"
 
 //////////////////////// HELPER MACROS ////////////////////////////////////////////////////////
 #define MOTORS_CMD(enable, left, right, d)                                     \
@@ -34,7 +35,10 @@ static int dual_vprintf(const char *fmt, va_list ap)
     bt_msg.len = vsnprintf((char *)bt_msg.data, BT_MSG_BUF_SIZE_BYTES, fmt, ap);
     if (bt_msg.len > 0)
     {
-        xQueueSend(bt_tosend_h, &bt_msg, 0);
+        if (xQueueSend(bt_tosend_h, &bt_msg, 0) != pdTRUE)
+        {
+            // ESP_LOGE(MAIN_TASK_LOG_TAG, "Can't put msg to bluetooth LOG queue!");
+        }
     }
 
     return vprintf(fmt, ap);
@@ -91,60 +95,52 @@ void app_main()
     ////////////////////////////////// TASKS CREATION //////////////////////////////////
     xTaskCreate(&motor_control_task, "motor_ctrl", 4096, (void *)motors_control_queue_h, 15, NULL);
     xTaskCreate(&line_follower_task, "line_follow", 4096, (void *)&lf_ctx, 17, &lf_task_h);
-    xTaskCreate(&obstacle_avoidance_task, "avoidance", 4096, (void *)&avoidance_ctx, 16, &avoidance_task_h);
+    xTaskCreate(&obstacle_avoidance_task, "avoidance", 4096, (void *)&avoidance_ctx, 17, &avoidance_task_h);
     xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, (void *)&bt_ctx, 3, NULL, 0);
-    xTaskCreatePinnedToCore(&meta_detection_task, "meta-detect", 3048,
-                            (void *)current_task_h, 11, NULL, 0);
+    // xTaskCreatePinnedToCore(&meta_detection_task, "meta-detect", 3048,
+    // (void *)current_task_h, 11, NULL, 0);
     /////////////////////////////////////////////////////////////////////////////////////
 
-    mission_state_t     mission_state        = MISSION_STATE_IDLE;
     uint32_t            any_bottom_ir_active = 0;
     static bt_com_msg_t bt_msg_rcv;
+    mission_state_t     current_state      = MISSION_STATE_IDLE;
+    mission_state_t     new_state          = MISSION_STATE_IDLE;
+    TickType_t          ticks_when_quitted = 0;
     for (;;)
     {
         if (xQueueReceive(bt_rcv_h, &bt_msg_rcv, pdMS_TO_TICKS(0)) == pdTRUE)
         {
-            ESP_LOGI(MAIN_TASK_LOG_TAG, "Bt msg received@");
-            ESP_LOG_BUFFER_HEX(MAIN_TASK_LOG_TAG, bt_msg_rcv.data, bt_msg_rcv.len);
+            ESP_LOGI(MAIN_TASK_LOG_TAG, "Bt msg received (len=%d)", bt_msg_rcv.len);
+            // ESP_LOG_BUFFER_HEX(MAIN_TASK_LOG_TAG, bt_msg_rcv.data, bt_msg_rcv.len);
 
-            if (bt_msg_rcv.len == 1)
+            uint8_t m = bt_msg_rcv.data[0];
+            ESP_LOGI(MAIN_TASK_LOG_TAG, "1st byte received: " BYTE_TO_BINARY_PATTERN,
+                     BYTE_TO_BINARY(m));
+            if (m == 4)
             {
-                uint8_t m = bt_msg_rcv.data[0];
-                ESP_LOGI(MAIN_TASK_LOG_TAG, "Received byte: " BYTE_TO_BINARY_PATTERN,
-                         BYTE_TO_BINARY(m));
-
-                if (m == 1)
-                {
-                    // Enable motors
-                    ESP_LOGI(MAIN_TASK_LOG_TAG, "Enabling motors!");
-                    MOTORS_CMD(true, 0.0, 0.0, pdMS_TO_TICKS(0));
-                }
-                else if (m == 2)
-                {
-                    // Disable motors
-                    ESP_LOGI(MAIN_TASK_LOG_TAG, "Disabling motors!");
-                    MOTORS_CMD(false, 0.0, 0.0, pdMS_TO_TICKS(0));
-                }
-                else if (m == 4)
-                {
-                    // Enable line-following mode
-                    mission_state = MISSION_STATE_FOLLOW_LINE;
-                    MOTORS_CMD(true, 0.8, 0.8, pdMS_TO_TICKS(0));
-                }
-                else if (m == 3)
-                {
-                    // Enable STOP mode
-                    mission_state = MISSION_STATE_STOP;
-                }
+                // Enable line-following mode
+                MOTORS_CMD(true, 0.8, 0.8, pdMS_TO_TICKS(0));
+                new_state = MISSION_STATE_FOLLOW_LINE;
+            }
+            else if (m == 3)
+            {
+                // Enable STOP mode;
+                new_state = MISSION_STATE_STOP;
+                MOTORS_CMD(false, 0.0, 0.0, pdMS_TO_TICKS(5000));
             }
         }
 
         if (xTaskNotifyWaitIndexed(MAIN_BOTTOM_IR_ACTIVITY_NOTIF_IDX,
                                    0x00, ULONG_MAX, &any_bottom_ir_active, pdTICKS_TO_MS(0)) == pdTRUE)
         {
-            if (mission_state != MISSION_STATE_FOLLOW_LINE)
+            // Allow changing mode with small frequency to avoid jittering
+            // upon obstacle detection, as robot may still be on the line.
+            if (current_state != MISSION_STATE_FOLLOW_LINE &&
+                (xTaskGetTickCount() - ticks_when_quitted) > pdMS_TO_TICKS(3000))
+            {
                 ESP_LOGI(MAIN_TASK_LOG_TAG, "Bottom IR shows activity - entering line follower mode");
-            mission_state = MISSION_STATE_FOLLOW_LINE;
+                new_state = MISSION_STATE_FOLLOW_LINE;
+            }
         }
 
         static uint32_t tmp = 0;
@@ -152,49 +148,70 @@ void app_main()
                                    0x00, ULONG_MAX, &tmp, pdTICKS_TO_MS(0)) == pdTRUE)
         {
             ESP_LOGI(MAIN_TASK_LOG_TAG, "Meta detected!");
+            new_state = MISSION_STATE_STOP;
         }
 
         if (xTaskNotifyWaitIndexed(MAIN_OBSTACLE_AHEAD_NOTIF_IDX,
                                    0x00, ULONG_MAX, &tmp, pdTICKS_TO_MS(0)) == pdTRUE)
         {
-            if (mission_state != MISSION_STATE_AVOID_OBSTACLE)
-                ESP_LOGI(MAIN_TASK_LOG_TAG, "Obstacle ahead - entering obstacle avoidance mode");
-            mission_state = MISSION_STATE_AVOID_OBSTACLE;
+            if (tmp == 1)
+                new_state = MISSION_STATE_AVOID_OBSTACLE;
+            else if (tmp == 2) {
+                // Reverse direction of rotation in line follower for one next time
+                
+            }
         }
 
-        // Triggers for state-specific setup [TODO]
-        switch (mission_state)
+        // State switching
+        if (current_state == new_state)
+        {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+
+        switch (current_state)
         {
         case MISSION_STATE_IDLE:
-            // ESP_LOGI(MAIN_TASK_LOG_TAG, "Idling!");
+            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Quitting mission mode - IDLE");
             break;
 
         case MISSION_STATE_FOLLOW_LINE:
-            xTaskNotify(lf_task_h, LF_STATE_ACTIVE, eSetValueWithOverwrite);
-            xTaskNotifyIndexed(avoidance_task_h, AVOIDANCE_IS_ACTIVE,
-                               AVOIDANCE_STATE_INACTIVE, eSetValueWithOverwrite);
+            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Quitting mission mode - LF");
+            xTaskNotify(lf_task_h, LF_STATE_INACTIVE, eSetValueWithOverwrite);
+            ticks_when_quitted = xTaskGetTickCount();
             break;
 
         case MISSION_STATE_AVOID_OBSTACLE:
-            xTaskNotify(lf_task_h, LF_STATE_INACTIVE, eSetValueWithOverwrite);
-            xTaskNotifyIndexed(avoidance_task_h, AVOIDANCE_IS_ACTIVE,
-                               AVOIDANCE_STATE_ACTIVE, eSetValueWithOverwrite);
+            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Quitting mission mode - AVOIDANCE");
+            xTaskNotify(avoidance_task_h, AVOIDANCE_STATE_INACTIVE, eSetValueWithOverwrite);
             break;
 
         case MISSION_STATE_STOP:
-        {
-            ESP_LOGI(MAIN_TASK_LOG_TAG, "Mission state stop - disabling motors & exitting otehr modes!");
-            MOTORS_CMD(false, 0.0, 0.0, pdMS_TO_TICKS(1000));
-            xTaskNotify(lf_task_h, LF_STATE_INACTIVE, eSetValueWithOverwrite);
-            xTaskNotifyIndexed(avoidance_task_h, AVOIDANCE_IS_ACTIVE,
-                               AVOIDANCE_STATE_INACTIVE, eSetValueWithOverwrite);
-            mission_state = MISSION_STATE_IDLE;
+            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Quitting mission mode - STOP");
         }
-        break;
 
-        default:
+        switch (new_state)
+        {
+        case MISSION_STATE_IDLE:
+            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - IDLE");
             break;
+
+        case MISSION_STATE_FOLLOW_LINE:
+            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - LF");
+            xTaskNotify(lf_task_h, LF_STATE_ACTIVE, eSetValueWithOverwrite);
+            break;
+
+        case MISSION_STATE_AVOID_OBSTACLE:
+            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - AVOIDANCE");
+            xTaskNotify(avoidance_task_h, AVOIDANCE_STATE_ACTIVE, eSetValueWithOverwrite);
+            break;
+
+        case MISSION_STATE_STOP:
+            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - STOP");
+            MOTORS_CMD(false, 0.0, 0.0, pdMS_TO_TICKS(5000));
         }
+
+        current_state = new_state;
 
         vTaskDelay(pdMS_TO_TICKS(50));
     }
