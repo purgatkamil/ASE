@@ -36,4 +36,10 @@ typedef enum
     LF_STATE_INACTIVE
 } lf_state_command_t;
 
+typedef enum
+{
+    AVOIDANCE_STATE_ACTIVE = 0,
+    AVOIDANCE_STATE_INACTIVE
+} avoidance_state_command_t;
+
 #endif

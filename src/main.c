@@ -11,17 +11,17 @@
 #include "line_follow.h"
 #include "meta_detection.h"
 #include "motor_control.h"
-#include "ultrasonic_sensor.h"
+#include "obstacle_avoidance.h"
 
 //////////////////////// HELPER MACROS ////////////////////////////////////////////////////////
-#define MOTORS_CMD(enable, left, right, d)                                                    \
-    do                                                                                        \
-    {                                                                                         \
-        if (enable)                                                                           \
-            SET_BIT(motors_control.cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);                   \
-        else                                                                                  \
-            CLEAR_BIT(motors_control.cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);                 \
-        send_mot_spd(motors_control_queue_h, &motors_control, left, right, pdMS_TO_TICKS(d)); \
+#define MOTORS_CMD(enable, left, right, d)                                     \
+    do                                                                         \
+    {                                                                          \
+        if (enable)                                                            \
+            SET_BIT(motors_control.cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);    \
+        else                                                                   \
+            CLEAR_BIT(motors_control.cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);  \
+        send_mot_spd(motors_control_queue_h, &motors_control, left, right, d); \
     } while (0)
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,10 +44,14 @@ static int dual_vprintf(const char *fmt, va_list ap)
 void app_main()
 {
     const TaskHandle_t current_task_h = xTaskGetCurrentTaskHandle();
-    
-    QueueHandle_t sonar_queue_h          = xQueueCreate(5, sizeof(ultrasonic_measurement_t));
+
     QueueHandle_t motors_control_queue_h = xQueueCreate(10, sizeof(motors_control_msg_t));
-    sonar_motors_q_ok_or_abort(sonar_queue_h, motors_control_queue_h, MAIN_TASK_LOG_TAG);
+    if (motors_control_queue_h == NULL)
+    {
+        ESP_LOGE(MAIN_TASK_LOG_TAG, "Failed to create motors_control_queue_h!");
+        abort();
+    }
+
     static QueueHandle_t bt_rcv_h;
     bt_rcv_h    = xQueueCreate(5, sizeof(bt_com_msg_t));
     bt_tosend_h = xQueueCreate(35, sizeof(bt_com_msg_t));
@@ -61,10 +65,6 @@ void app_main()
     esp_log_level_set(META_DETECTION_LOG_TAG, ESP_LOG_NONE);
     esp_log_level_set(SONAR_SERVO_LOG_TAG, ESP_LOG_NONE);
 #endif
-
-    ultrasonic_measurement_t sonar_notif = {
-        .angle    = 0,
-        .distance = 0.0f};
 
     motors_control_msg_t motors_control = {
         .speed_cmd = {
@@ -80,12 +80,18 @@ void app_main()
         .q_rcv_h    = bt_rcv_h,
         .q_tosend_h = bt_tosend_h};
 
+    obstacle_avoidance_ctx_t avoidance_ctx = {
+        .mot_cmd_q_handle = motors_control_queue_h,
+        .mot_ctrl_msg     = &motors_control,
+        .main_task_h      = current_task_h};
+
     static TaskHandle_t lf_task_h;
+    static TaskHandle_t avoidance_task_h;
 
     ////////////////////////////////// TASKS CREATION //////////////////////////////////
     xTaskCreate(&motor_control_task, "motor_ctrl", 4096, (void *)motors_control_queue_h, 15, NULL);
-    xTaskCreate(&ultrasonic_sensor_task, "sonar", 4096, (void *)sonar_queue_h, 10, NULL);
-    xTaskCreate(&line_follower_task, "line_follow", 4096, (void *)&lf_ctx, 16, &lf_task_h);
+    xTaskCreate(&line_follower_task, "line_follow", 4096, (void *)&lf_ctx, 17, &lf_task_h);
+    xTaskCreate(&obstacle_avoidance_task, "avoidance", 4096, (void *)&avoidance_ctx, 16, &avoidance_task_h);
     xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, (void *)&bt_ctx, 3, NULL, 0);
     xTaskCreatePinnedToCore(&meta_detection_task, "meta-detect", 3048,
                             (void *)current_task_h, 11, NULL, 0);
@@ -96,15 +102,6 @@ void app_main()
     static bt_com_msg_t bt_msg_rcv;
     for (;;)
     {
-        if (xQueueReceive(sonar_queue_h, &sonar_notif, pdMS_TO_TICKS(0)) == pdTRUE)
-        {
-
-            if (sonar_notif.distance < 8)
-            {
-                mission_state = MISSION_STATE_STOP;
-            }
-        }
-
         if (xQueueReceive(bt_rcv_h, &bt_msg_rcv, pdMS_TO_TICKS(0)) == pdTRUE)
         {
             ESP_LOGI(MAIN_TASK_LOG_TAG, "Bt msg received@");
@@ -142,16 +139,27 @@ void app_main()
             }
         }
 
-        if (xTaskNotifyWait(0x00, ULONG_MAX, &any_bottom_ir_active, pdTICKS_TO_MS(0)) == pdTRUE)
+        if (xTaskNotifyWaitIndexed(MAIN_BOTTOM_IR_ACTIVITY_NOTIF_IDX,
+                                   0x00, ULONG_MAX, &any_bottom_ir_active, pdTICKS_TO_MS(0)) == pdTRUE)
         {
-            ESP_LOGI(MAIN_TASK_LOG_TAG, "Bottom IR shows activity [notif from lf received]");
-            xTaskNotify(lf_task_h, LF_STATE_ACTIVE, eSetValueWithOverwrite);
+            if (mission_state != MISSION_STATE_FOLLOW_LINE)
+                ESP_LOGI(MAIN_TASK_LOG_TAG, "Bottom IR shows activity - entering line follower mode");
+            mission_state = MISSION_STATE_FOLLOW_LINE;
         }
 
         static uint32_t tmp = 0;
-        if (xTaskNotifyWaitIndexed(1, 0x00, ULONG_MAX, &tmp, pdTICKS_TO_MS(0)) == pdTRUE)
+        if (xTaskNotifyWaitIndexed(MAIN_META_DETECTION_NOTIF_IDX,
+                                   0x00, ULONG_MAX, &tmp, pdTICKS_TO_MS(0)) == pdTRUE)
         {
             ESP_LOGI(MAIN_TASK_LOG_TAG, "Meta detected!");
+        }
+
+        if (xTaskNotifyWaitIndexed(MAIN_OBSTACLE_AHEAD_NOTIF_IDX,
+                                   0x00, ULONG_MAX, &tmp, pdTICKS_TO_MS(0)) == pdTRUE)
+        {
+            if (mission_state != MISSION_STATE_AVOID_OBSTACLE)
+                ESP_LOGI(MAIN_TASK_LOG_TAG, "Obstacle ahead - entering obstacle avoidance mode");
+            mission_state = MISSION_STATE_AVOID_OBSTACLE;
         }
 
         // Triggers for state-specific setup [TODO]
@@ -162,16 +170,24 @@ void app_main()
             break;
 
         case MISSION_STATE_FOLLOW_LINE:
-            // If robot was stopped, give it a little go-ahead as burst of
-            // high control value to tear the static friction [TODO]
             xTaskNotify(lf_task_h, LF_STATE_ACTIVE, eSetValueWithOverwrite);
+            xTaskNotifyIndexed(avoidance_task_h, AVOIDANCE_IS_ACTIVE,
+                               AVOIDANCE_STATE_INACTIVE, eSetValueWithOverwrite);
+            break;
+
+        case MISSION_STATE_AVOID_OBSTACLE:
+            xTaskNotify(lf_task_h, LF_STATE_INACTIVE, eSetValueWithOverwrite);
+            xTaskNotifyIndexed(avoidance_task_h, AVOIDANCE_IS_ACTIVE,
+                               AVOIDANCE_STATE_ACTIVE, eSetValueWithOverwrite);
             break;
 
         case MISSION_STATE_STOP:
         {
-            ESP_LOGI(MAIN_TASK_LOG_TAG, "MISSION_STATE_STOP - Disabling motors!");
+            ESP_LOGI(MAIN_TASK_LOG_TAG, "Mission state stop - disabling motors & exitting otehr modes!");
             MOTORS_CMD(false, 0.0, 0.0, pdMS_TO_TICKS(1000));
             xTaskNotify(lf_task_h, LF_STATE_INACTIVE, eSetValueWithOverwrite);
+            xTaskNotifyIndexed(avoidance_task_h, AVOIDANCE_IS_ACTIVE,
+                               AVOIDANCE_STATE_INACTIVE, eSetValueWithOverwrite);
             mission_state = MISSION_STATE_IDLE;
         }
         break;

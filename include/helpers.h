@@ -32,17 +32,6 @@ static inline int count_n_of_ones(unsigned int u)
     return ((uCount + (uCount >> 3)) & 030707070707) % 63;
 }
 
-static inline void sonar_motors_q_ok_or_abort(QueueHandle_t sonar_q, QueueHandle_t mot_ctr_q, const char *TAG)
-{
-    if (sonar_q == NULL || mot_ctr_q == NULL)
-    {
-        ESP_LOGE(TAG, "Failed to create queue (sonar_q_fail = %d, motors_control_q_fail = %d)",
-                 sonar_q == NULL,
-                 mot_ctr_q == NULL);
-        abort();
-    }
-}
-
 #define N_BITS_ONES_N_ZEROS(var, mask, nhigh, nlow)          \
     ((count_n_of_ones(var & (~((uint32_t)mask))) >= nhigh && \
       (count_n_of_ones((~var) & mask)) >= nlow))
