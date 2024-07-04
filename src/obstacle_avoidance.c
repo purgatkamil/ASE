@@ -54,7 +54,7 @@ void obstacle_avoidance_task(void *pvParameters)
             {
                 ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Sonar reading: %.4f cm", sonar_notif.distance);
                 if (ir_f == 1)
-                    xTaskNotifyIndexed(oa_ctx->main_task_h, MAIN_OBSTACLE_AHEAD_NOTIF_IDX, 1, eNoAction);
+                    xTaskNotifyIndexed(oa_ctx->main_task_h, MAIN_OBSTACLE_AHEAD_NOTIF_IDX, 1, eSetValueWithOverwrite);
             }
         }
 
@@ -62,7 +62,7 @@ void obstacle_avoidance_task(void *pvParameters)
         if (active && oneshot)
         {
 
-            oneshot = true;
+            oneshot     = true;
             int8_t sign = false ? -1 : 1;
             // false -> right, true -> left
 
@@ -114,7 +114,7 @@ void obstacle_avoidance_task(void *pvParameters)
                 DIR++;
                 break;
 
-                 case 4:
+            case 4:
                 ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Turning back");
                 send_mot_spd(mc_q_h, mc, -sign * 1.0, +sign * 1.0, pdMS_TO_TICKS(0));
                 vTaskDelay(pdMS_TO_TICKS(-sign < 0 ? 430 + 0 : 430 + (-30)));
@@ -122,9 +122,10 @@ void obstacle_avoidance_task(void *pvParameters)
                 DIR++;
                 break;
 
-                 case 5:
+            case 5:
                 ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Straight");
                 send_mot_spd(mc_q_h, mc, 0.7, 0.6, pdMS_TO_TICKS(0));
+                xTaskNotifyIndexed(oa_ctx->main_task_h, MAIN_OBSTACLE_AHEAD_NOTIF_IDX, 2, eSetValueWithOverwrite);
                 DIR++;
                 break;
 

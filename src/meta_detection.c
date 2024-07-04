@@ -24,23 +24,33 @@ void meta_detection_task(void *pvParameters)
              META_DETECTION_ADC_UNIT,
              META_DETECTION_ADC_CHAN);
 
-    int    adc_out_raw     = 0;
-    int    readings_average = 0;
-    size_t i               = 0;
+    int     adc_out_raw       = 0;
+    int     readings_average  = 0;
+    size_t  i                 = 0;
+    uint8_t certainty_measure = 0;
     while (1)
     {
         readings_average = 0;
-        i               = 0;
         for (i = 0; i < META_DETECTION_AVG_SAMPLE_CNT; i++)
         {
             ESP_ERROR_CHECK(adc_oneshot_read(adc2_handle, META_DETECTION_ADC_CHAN, &adc_out_raw));
             readings_average += adc_out_raw;
-            vTaskDelay(pdMS_TO_TICKS(30));
+            vTaskDelay(pdMS_TO_TICKS(20));
         }
 
         readings_average /= (double)META_DETECTION_AVG_SAMPLE_CNT;
         ESP_LOGI(META_DETECTION_LOG_TAG, "Average: %d", readings_average);
-        if (abs(adc_out_raw - readings_average) >= META_DETECTION_TRIG_THRESHOLD)
+        certainty_measure = 0;
+        // Measure several times to make sure its really out of pocket
+        for (i = 0; i < 4; i++)
+        {
+            ESP_ERROR_CHECK(adc_oneshot_read(adc2_handle, META_DETECTION_ADC_CHAN, &adc_out_raw));
+            if (abs(adc_out_raw - readings_average) >= META_DETECTION_TRIG_THRESHOLD)
+                certainty_measure++;
+            vTaskDelay(pdMS_TO_TICKS(40));
+        }
+
+        if (certainty_measure > 3)
         {
             xTaskNotifyIndexed(main_task_h, MAIN_META_DETECTION_NOTIF_IDX, 0x0, eNoAction);
             ESP_LOGI(META_DETECTION_LOG_TAG,
@@ -48,6 +58,8 @@ void meta_detection_task(void *pvParameters)
                      readings_average,
                      adc_out_raw);
         }
+
+        // vTaskDelay(pdMS_TO_TICKS(40));
     }
 
     ESP_ERROR_CHECK(adc_oneshot_del_unit(adc2_handle));

@@ -32,10 +32,10 @@
 
 // How big difference in reading in regard to
 // the average readings will trigger meta detection
-#define META_DETECTION_TRIG_THRESHOLD 30
+#define META_DETECTION_TRIG_THRESHOLD 10
 // How many samples should be averaged for computation
 // of value that is not considered meta
-#define META_DETECTION_AVG_SAMPLE_CNT 25
+#define META_DETECTION_AVG_SAMPLE_CNT 20
 ////////////////////////////////////////////////
 /**********************************************/
 ////////////////////////////////////////////////

@@ -45,6 +45,13 @@ static int dual_vprintf(const char *fmt, va_list ap)
 }
 #endif
 
+int64_t xx_time_get_time()
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (tv.tv_sec * 1000LL + (tv.tv_usec / 1000LL));
+}
+
 void app_main()
 {
     const TaskHandle_t current_task_h = xTaskGetCurrentTaskHandle();
@@ -97,15 +104,18 @@ void app_main()
     xTaskCreate(&line_follower_task, "line_follow", 4096, (void *)&lf_ctx, 17, &lf_task_h);
     xTaskCreate(&obstacle_avoidance_task, "avoidance", 4096, (void *)&avoidance_ctx, 17, &avoidance_task_h);
     xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, (void *)&bt_ctx, 3, NULL, 0);
-    // xTaskCreatePinnedToCore(&meta_detection_task, "meta-detect", 3048,
-    // (void *)current_task_h, 11, NULL, 0);
+    xTaskCreatePinnedToCore(&meta_detection_task, "meta-detect", 3048,
+                            (void *)current_task_h, 11, NULL, 1);
     /////////////////////////////////////////////////////////////////////////////////////
 
     uint32_t            any_bottom_ir_active = 0;
     static bt_com_msg_t bt_msg_rcv;
-    mission_state_t     current_state      = MISSION_STATE_IDLE;
-    mission_state_t     new_state          = MISSION_STATE_IDLE;
-    TickType_t          ticks_when_quitted = 0;
+    mission_state_t     current_state              = MISSION_STATE_IDLE;
+    mission_state_t     new_state                  = MISSION_STATE_IDLE;
+    TickType_t          ticks_when_quitted         = 0;
+    uint8_t             change_next_lf_turning_dir = 0;
+    int64_t             time_mission_start         = 0;
+    bool                celebrated_once            = false;
     for (;;)
     {
         if (xQueueReceive(bt_rcv_h, &bt_msg_rcv, pdMS_TO_TICKS(0)) == pdTRUE)
@@ -120,7 +130,8 @@ void app_main()
             {
                 // Enable line-following mode
                 MOTORS_CMD(true, 0.8, 0.8, pdMS_TO_TICKS(0));
-                new_state = MISSION_STATE_FOLLOW_LINE;
+                new_state          = MISSION_STATE_FOLLOW_LINE;
+                time_mission_start = xx_time_get_time();
             }
             else if (m == 3)
             {
@@ -147,8 +158,14 @@ void app_main()
         if (xTaskNotifyWaitIndexed(MAIN_META_DETECTION_NOTIF_IDX,
                                    0x00, ULONG_MAX, &tmp, pdTICKS_TO_MS(0)) == pdTRUE)
         {
-            ESP_LOGI(MAIN_TASK_LOG_TAG, "Meta detected!");
-            new_state = MISSION_STATE_STOP;
+            ESP_LOGI(MAIN_TASK_LOG_TAG, "Meta detected [low uncertainty]!");
+            int64_t tofride = xx_time_get_time() - time_mission_start;
+            ESP_LOGI(MAIN_TASK_LOG_TAG, "Time of ride so far: %lld ms (%.3f s)", tofride, (double)tofride / 1000.0);
+            if (!celebrated_once && tofride > (60*1000) )
+            {
+                new_state       = MISSION_STATE_CELEBRATE;
+                celebrated_once = 1;
+            }
         }
 
         if (xTaskNotifyWaitIndexed(MAIN_OBSTACLE_AHEAD_NOTIF_IDX,
@@ -156,9 +173,10 @@ void app_main()
         {
             if (tmp == 1)
                 new_state = MISSION_STATE_AVOID_OBSTACLE;
-            else if (tmp == 2) {
+            else if (tmp == 2)
+            {
                 // Reverse direction of rotation in line follower for one next time
-                
+                change_next_lf_turning_dir = 2;
             }
         }
 
@@ -188,6 +206,9 @@ void app_main()
 
         case MISSION_STATE_STOP:
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Quitting mission mode - STOP");
+
+        default:
+            break;
         }
 
         switch (new_state)
@@ -198,7 +219,8 @@ void app_main()
 
         case MISSION_STATE_FOLLOW_LINE:
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - LF");
-            xTaskNotify(lf_task_h, LF_STATE_ACTIVE, eSetValueWithOverwrite);
+            xTaskNotify(lf_task_h, LF_STATE_ACTIVE | change_next_lf_turning_dir, eSetValueWithOverwrite);
+            if (change_next_lf_turning_dir) change_next_lf_turning_dir = 0;
             break;
 
         case MISSION_STATE_AVOID_OBSTACLE:
@@ -206,9 +228,25 @@ void app_main()
             xTaskNotify(avoidance_task_h, AVOIDANCE_STATE_ACTIVE, eSetValueWithOverwrite);
             break;
 
+        case MISSION_STATE_CELEBRATE:
+            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Celebration!! Meta found!!");
+            static size_t i = 0;
+            for (i = 0; i < 7; i++)
+            {
+                MOTORS_CMD(true, -0.8, 0.8, pdMS_TO_TICKS(0));
+                vTaskDelay(pdMS_TO_TICKS(200));
+                MOTORS_CMD(true, 0.8, -0.8, pdMS_TO_TICKS(0));
+                vTaskDelay(pdMS_TO_TICKS(200));
+            }
+            MOTORS_CMD(false, 0.0, 0.0, pdMS_TO_TICKS(10000));
+            new_state = MISSION_STATE_STOP;
+
         case MISSION_STATE_STOP:
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - STOP");
             MOTORS_CMD(false, 0.0, 0.0, pdMS_TO_TICKS(5000));
+
+        default:
+            break;
         }
 
         current_state = new_state;

@@ -104,11 +104,19 @@ void line_follower_task(void *pvParameters)
     uint32_t            ir_r_history           = 0;
     uint32_t            orchestrator_notif_val = 0;
     uint8_t             active                 = 0;
+    int8_t              turnig_dir_interp      = 1;
     for (;;)
     {
         if (xTaskNotifyWait(0x00, ULONG_MAX, &orchestrator_notif_val, pdMS_TO_TICKS(0)) == pdTRUE)
         {
-            active = orchestrator_notif_val == LF_STATE_ACTIVE;
+            active = (orchestrator_notif_val & 0x01) == LF_STATE_ACTIVE;
+
+            // Change to enum later, please.
+            if ((orchestrator_notif_val & 0x02) == 0x02)
+            {
+                // Change interpretation of turning direction for one time
+                turnig_dir_interp = -1;
+            }
         }
 
         // Reversing logic of IR sensors, as at GPIO level 0 they are active
@@ -137,29 +145,43 @@ void line_follower_task(void *pvParameters)
             if (movement_dir == LINE_FOLLOWER_DIR_STRAIGHT &&
                 pdTICKS_TO_MS(xTaskGetTickCount() - last_turn_time) > TURNING_DEAD_TIME_MS)
             {
-                if (N_BITS_ONES_N_ZEROS(ir_c_history, 0xFF, 6, 8)) // center IR crossed the line
+                static uint8_t _turning;
+
+                if (turnig_dir_interp != 1)
                 {
-                    // ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center] IR assumed to have crossed the line");
-                    static uint8_t _turning;
-                    _turning = 0;
-                    if (N_BITS_ONES_N_ZEROS(ir_l_history, 0b1111111, 3, 3))
+                    if (ir_l_history & 0x01)
                     {
-                        ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center, left] IR assumed to have crossed the line - turning LEFT");
                         movement_dir = LINE_FOLLOWER_DIR_LEFT;
                         _turning     = 1;
                     }
-                    else if (N_BITS_ONES_N_ZEROS(ir_r_history, 0b1111111, 3, 3))
+                    else if (ir_r_history & 0x01)
+                    {
+                        movement_dir = LINE_FOLLOWER_DIR_RIGHT;
+                        _turning     = 1;
+                    }
+                }
+                else if (N_BITS_ONES_N_ZEROS(ir_c_history, 0xFF, 0, 8)) // center IR crossed the line
+                {
+                    // ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center] IR assumed to have crossed the line");
+                    _turning = 0;
+                    // if (N_BITS_ONES_N_ZEROS(ir_l_history, 0b1111111, 3, 3))
+                    // {
+                    //     ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center, left] IR assumed to have crossed the line - turning LEFT");
+                    //     movement_dir = LINE_FOLLOWER_DIR_LEFT;
+                    //     _turning     = 1;
+                    // }
+                    if (N_BITS_ONES_N_ZEROS(ir_r_history, 0b1111111, 3, 5))
                     {
                         ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "[center, right] IR assumed to have crossed the line - turning RIGHT");
                         movement_dir = LINE_FOLLOWER_DIR_RIGHT;
                         _turning     = 1;
                     }
+                }
 
-                    if (_turning)
-                    {
-                        ir_c_history = ir_l_history = ir_r_history = 0;
-                        last_turn_time                             = xTaskGetTickCount();
-                    }
+                if (_turning)
+                {
+                    ir_c_history = ir_l_history = ir_r_history = 0;
+                    last_turn_time                             = xTaskGetTickCount();
                 }
             }
 
@@ -174,6 +196,11 @@ void line_follower_task(void *pvParameters)
             case LINE_FOLLOWER_DIR_LEFT:
             case LINE_FOLLOWER_DIR_RIGHT:
                 int8_t sign = movement_dir == LINE_FOLLOWER_DIR_LEFT ? -1 : 1;
+                sign *= turnig_dir_interp;
+                if (turnig_dir_interp == -1)
+                {
+                    turnig_dir_interp = 1;
+                }
                 ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "Turning [dir=%s]",
                          sign < 0 ? "LEFT" : "RIGHT");
                 send_mot_spd(lf_ctx->mot_cmd_q_handle, mc, sign * 1.0, -sign * 1.0, pdMS_TO_TICKS(0));
