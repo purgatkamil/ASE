@@ -13,6 +13,7 @@
 #include "motor_control.h"
 #include "obstacle_avoidance.h"
 #include "state_transitions.h"
+#include "task_notif_indexes.h"
 
 //////////////////////// HELPER MACROS ////////////////////////////////////////////////////////
 #define MOTORS_CMD(enable, left, right, d)                                     \
@@ -104,18 +105,18 @@ void app_main()
     xTaskCreate(&line_follower_task, "line_follow", 4096, (void *)&lf_ctx, 17, &lf_task_h);
     xTaskCreate(&obstacle_avoidance_task, "avoidance", 4096, (void *)&avoidance_ctx, 17, &avoidance_task_h);
     xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, (void *)&bt_ctx, 3, NULL, 0);
-    xTaskCreatePinnedToCore(&meta_detection_task, "meta-detect", 3048,
-                            (void *)current_task_h, 11, NULL, 1);
+    xTaskCreate(&meta_detection_task, "meta-detect", 3048,
+                (void *)current_task_h, 11, NULL);
     /////////////////////////////////////////////////////////////////////////////////////
 
-    uint32_t            any_bottom_ir_active = 0;
+    // uint32_t            any_bottom_ir_active = 0;
     static bt_com_msg_t bt_msg_rcv;
     mission_state_t     current_state              = MISSION_STATE_IDLE;
-    mission_state_t     new_state                  = MISSION_STATE_IDLE;
-    TickType_t          ticks_when_quitted         = 0;
+    mission_state_t     new_state                  = MISSION_STATE_AVOID_OBSTACLE;
+    // TickType_t          ticks_when_quitted         = 0;
     uint8_t             change_next_lf_turning_dir = 0;
-    int64_t             time_mission_start         = 0;
-    bool                celebrated_once            = false;
+    // int64_t             time_mission_start         = 0;
+    // bool                celebrated_once            = false;
     for (;;)
     {
         if (xQueueReceive(bt_rcv_h, &bt_msg_rcv, pdMS_TO_TICKS(0)) == pdTRUE)
@@ -131,7 +132,7 @@ void app_main()
                 // Enable line-following mode
                 MOTORS_CMD(true, 0.8, 0.8, pdMS_TO_TICKS(0));
                 new_state          = MISSION_STATE_FOLLOW_LINE;
-                time_mission_start = xx_time_get_time();
+                // time_mission_start = xx_time_get_time();
             }
             else if (m == 3)
             {
@@ -141,44 +142,44 @@ void app_main()
             }
         }
 
-        if (xTaskNotifyWaitIndexed(MAIN_BOTTOM_IR_ACTIVITY_NOTIF_IDX,
-                                   0x00, ULONG_MAX, &any_bottom_ir_active, pdTICKS_TO_MS(0)) == pdTRUE)
-        {
-            // Allow changing mode with small frequency to avoid jittering
-            // upon obstacle detection, as robot may still be on the line.
-            if (current_state != MISSION_STATE_FOLLOW_LINE &&
-                (xTaskGetTickCount() - ticks_when_quitted) > pdMS_TO_TICKS(3000))
-            {
-                ESP_LOGI(MAIN_TASK_LOG_TAG, "Bottom IR shows activity - entering line follower mode");
-                new_state = MISSION_STATE_FOLLOW_LINE;
-            }
-        }
+        // if (xTaskNotifyWaitIndexed(MAIN_BOTTOM_IR_ACTIVITY_NOTIF_IDX,
+        //                            0x00, ULONG_MAX, &any_bottom_ir_active, pdTICKS_TO_MS(0)) == pdTRUE)
+        // {
+        //     // Allow changing mode with small frequency to avoid jittering
+        //     // upon obstacle detection, as robot may still be on the line.
+        //     if (current_state != MISSION_STATE_FOLLOW_LINE &&
+        //         (xTaskGetTickCount() - ticks_when_quitted) > pdMS_TO_TICKS(3000))
+        //     {
+        //         ESP_LOGI(MAIN_TASK_LOG_TAG, "Bottom IR shows activity - entering line follower mode");
+        //         new_state = MISSION_STATE_FOLLOW_LINE;
+        //     }
+        // }
 
-        static uint32_t tmp = 0;
-        if (xTaskNotifyWaitIndexed(MAIN_META_DETECTION_NOTIF_IDX,
-                                   0x00, ULONG_MAX, &tmp, pdTICKS_TO_MS(0)) == pdTRUE)
-        {
-            ESP_LOGI(MAIN_TASK_LOG_TAG, "Meta detected [low uncertainty]!");
-            int64_t tofride = xx_time_get_time() - time_mission_start;
-            ESP_LOGI(MAIN_TASK_LOG_TAG, "Time of ride so far: %lld ms (%.3f s)", tofride, (double)tofride / 1000.0);
-            if (!celebrated_once && tofride > (60*1000) )
-            {
-                new_state       = MISSION_STATE_CELEBRATE;
-                celebrated_once = 1;
-            }
-        }
+        // static uint32_t tmp = 0;
+        // if (xTaskNotifyWaitIndexed(MAIN_META_DETECTION_NOTIF_IDX,
+        //                            0x00, ULONG_MAX, &tmp, pdTICKS_TO_MS(0)) == pdTRUE)
+        // {
+        //     ESP_LOGI(MAIN_TASK_LOG_TAG, "Meta detected [low uncertainty]!");
+        //     int64_t tofride = xx_time_get_time() - time_mission_start;
+        //     ESP_LOGI(MAIN_TASK_LOG_TAG, "Time of ride so far: %lld ms (%.3f s)", tofride, (double)tofride / 1000.0);
+        //     if (!celebrated_once && tofride > (60 * 1000))
+        //     {
+        //         new_state       = MISSION_STATE_CELEBRATE;
+        //         celebrated_once = 1;
+        //     }
+        // }
 
-        if (xTaskNotifyWaitIndexed(MAIN_OBSTACLE_AHEAD_NOTIF_IDX,
-                                   0x00, ULONG_MAX, &tmp, pdTICKS_TO_MS(0)) == pdTRUE)
-        {
-            if (tmp == 1)
-                new_state = MISSION_STATE_AVOID_OBSTACLE;
-            else if (tmp == 2)
-            {
-                // Reverse direction of rotation in line follower for one next time
-                change_next_lf_turning_dir = 2;
-            }
-        }
+        // if (xTaskNotifyWaitIndexed(MAIN_OBSTACLE_AHEAD_NOTIF_IDX,
+        //                            0x00, ULONG_MAX, &tmp, pdTICKS_TO_MS(0)) == pdTRUE)
+        // {
+        //     if (tmp == 1)
+        //         new_state = MISSION_STATE_AVOID_OBSTACLE;
+        //     else if (tmp == 2)
+        //     {
+        //         // Reverse direction of rotation in line follower for one next time
+        //         change_next_lf_turning_dir = 2;
+        //     }
+        // }
 
         // State switching
         if (current_state == new_state)
@@ -196,7 +197,7 @@ void app_main()
         case MISSION_STATE_FOLLOW_LINE:
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Quitting mission mode - LF");
             xTaskNotify(lf_task_h, LF_STATE_INACTIVE, eSetValueWithOverwrite);
-            ticks_when_quitted = xTaskGetTickCount();
+            // ticks_when_quitted = xTaskGetTickCount();
             break;
 
         case MISSION_STATE_AVOID_OBSTACLE:

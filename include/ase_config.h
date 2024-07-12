@@ -16,7 +16,7 @@
 ////////////////////////////////////////////////
 #define OBSTACLE_AVOIDANCE_LOG_TAG "avoidance"
 
-#define IR_TOP_LEFT_GPIO GPIO_NUM_36
+#define IR_TOP_LEFT_GPIO  GPIO_NUM_36
 #define IR_TOP_RIGHT_GPIO GPIO_NUM_39
 #define IR_TOP_FRONT_GPIO GPIO_NUM_34
 ////////////////////////////////////////////////
@@ -106,7 +106,7 @@
 
 // Time that is waited before taking measurement after commanding
 // new servo position (to make sure servo has enough time to move)
-#define DELAY_AFTER_SERVO_MOVEMENT_MS 50
+#define DELAY_AFTER_SERVO_MOVEMENT_MS 20
 
 // Maximum distance that is propagated further onto the system
 // bigger values are still measured, but they are not passed
@@ -140,20 +140,6 @@
 // If not commented, messages logged using ESP logging framework
 // will be additionally sent to Bluetooth task's send queue.
 #define LOG_OVER_BLUETOOTH
-////////////////////////////////////////////////
-/**********************************************/
-////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////
-/////////// NOTIFICATION INDEXES ///////////////
-// Indexes for tasks that receive notification /
-////////////////////////////////////////////////
-#define MAIN_BOTTOM_IR_ACTIVITY_NOTIF_IDX 0
-#define MAIN_META_DETECTION_NOTIF_IDX     1
-#define MAIN_OBSTACLE_AHEAD_NOTIF_IDX     2
-
-#define AVOIDANCE_IS_ACTIVE 0
 ////////////////////////////////////////////////
 /**********************************************/
 ////////////////////////////////////////////////

@@ -13,6 +13,13 @@
 
 #include "ase_config.h"
 #include "ase_typedefs.h"
+#include "task_notif_indexes.h"
+
+typedef struct
+{
+    TaskHandle_t  servo_angle_ready_notif_task_h;
+    QueueHandle_t masurements_queue_h;
+} sonar_task_ctx_t;
 
 typedef struct
 {

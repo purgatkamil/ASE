@@ -122,30 +122,43 @@ void ultrasonic_sensor_task(void *pvParameters)
     // Configure LEDC peripherial
     ledc_servo_sonar_init();
 
-    // Get handle to main task to be notified with measurement values
-    // TaskHandle_t main_task_h = (TaskHandle_t)pvParameters;
-    QueueHandle_t sonar_queue_h = (QueueHandle_t)pvParameters;
+    sonar_task_ctx_t *ctx                      = (sonar_task_ctx_t *)pvParameters;
+    TaskHandle_t      servo_ready_task_notif_h = ctx->servo_angle_ready_notif_task_h;
+
+    // Get handle to the sonar queue that
+    // will hold most recent measurements
+    QueueHandle_t sonar_queue_h = ctx->masurements_queue_h;
 
     ultrasonic_measurement_t sonar_meas;
 
-    uint32_t tof_ticks;
-    uint32_t servo_duty = 0;
-    int16_t  angle      = 0;
+    uint32_t        tof_ticks;
+    uint32_t        servo_duty          = 0;
+    int16_t         angle               = 0;
+    static uint32_t set_servo_notif_val = 0;
 
     for (;;)
     {
-        // LEDC_TIMER_20_BIT // 2^20 = 1048576, 100 Hz -> T=10ms
-        // Convert pulse width to duty cycle value
-        servo_duty = (angle_to_duty(angle) * ((1 << SERVO_LEDC_DUTY_RES) - 1)) * SERVO_LEDC_FREQUENCY / 1000000;
+        if (xTaskNotifyWaitIndexed(SONAR_SET_SERVO_ANGLE_NOTIF_IDX,
+                                   0x0, ULONG_MAX,
+                                   &set_servo_notif_val, pdMS_TO_TICKS(0)) == pdTRUE)
+        {
+            // New servo angle has been requested
+            angle = (int16_t)set_servo_notif_val;
+            // LEDC_TIMER_20_BIT // 2^20 = 1048576, 100 Hz -> T=10ms
+            // Convert pulse width to duty cycle value
+            servo_duty = (angle_to_duty(angle) * ((1 << SERVO_LEDC_DUTY_RES) - 1)) * SERVO_LEDC_FREQUENCY / 1000000;
 
-        ESP_LOGI(SONAR_SERVO_LOG_TAG, "Setting servo angle of %d deg (ton=%luus)", angle, servo_duty);
+            ESP_LOGI(SONAR_SERVO_LOG_TAG, "Setting servo angle of %d deg (ton=%luus)", angle, servo_duty);
 
-        ESP_ERROR_CHECK(ledc_set_duty(SERVO_LEDC_MODE, SERVO_LEDC_CHANNEL, servo_duty));
-        ESP_ERROR_CHECK(ledc_update_duty(SERVO_LEDC_MODE, SERVO_LEDC_CHANNEL));
+            ESP_ERROR_CHECK(ledc_set_duty(SERVO_LEDC_MODE, SERVO_LEDC_CHANNEL, servo_duty));
+            ESP_ERROR_CHECK(ledc_update_duty(SERVO_LEDC_MODE, SERVO_LEDC_CHANNEL));
 
-        // Wait a little before actually checking the result
-        // because servo takes some time to rotate before it can reliably measure
-        vTaskDelay(pdMS_TO_TICKS(DELAY_AFTER_SERVO_MOVEMENT_MS));
+            // Wait a little before actually checking the result
+            // because servo takes some time to rotate before it can reliably measure
+            vTaskDelay(pdMS_TO_TICKS(DELAY_AFTER_SERVO_MOVEMENT_MS));
+
+            xTaskNotifyIndexed(servo_ready_task_notif_h, MAIN_SERVO_ANGLE_READY, 0, eNoAction);
+        }
 
         // There is no point of advancing with servo movement if ultrasonic is not responding
         // block until ultrasonic is responding again.
@@ -153,13 +166,7 @@ void ultrasonic_sensor_task(void *pvParameters)
         {
             float pulse_width_us = tof_ticks * (1000000.0 / esp_clk_apb_freq());
             // convert the pulse width into measure distance
-            float distance = (float)pulse_width_us / 58;
-            if (distance > 150)
-            {
-                // out of range
-                continue;
-            }
-
+            float distance      = (float)pulse_width_us / 58;
             sonar_meas.angle    = angle;
             sonar_meas.distance = distance;
 
@@ -167,38 +174,8 @@ void ultrasonic_sensor_task(void *pvParameters)
                      angle,
                      distance);
 
-            if (xQueueSend(sonar_queue_h, &sonar_meas, pdMS_TO_TICKS(0)) != pdTRUE)
-            {
-                ESP_LOGE(SONAR_SERVO_LOG_TAG, "Failed to add sonar measurement to queue!");
-            }
+            // Saving only current measurement to the queue
+            xQueueOverwrite(sonar_queue_h, &sonar_meas);
         }
-
-        vTaskDelay(pdMS_TO_TICKS(100));
-
-#ifdef ENABLE_SERVO_MOVEMENT
-        static int8_t        angle_dir          = 1;
-        static const int16_t scan_range_one_way = 80;
-
-        angle += 20 * angle_dir;
-
-        // if (angle >= SERVO_MAX_DEGREE)
-        if (angle >= scan_range_one_way)
-        {
-            // angle = SERVO_MAX_DEGREE;
-            angle = scan_range_one_way;
-            angle_dir *= -1;
-        }
-        // else if (angle <= SERVO_MIN_DEGREE)
-        else if (angle <= -scan_range_one_way)
-        {
-            // angle = SERVO_MIN_DEGREE;
-            angle = -scan_range_one_way;
-            angle_dir *= -1;
-        }
-#endif
-
-#ifndef ENABLE_SERVO_MOVEMENT
-        angle = 0;
-#endif
     }
 }

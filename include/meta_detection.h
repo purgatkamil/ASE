@@ -7,6 +7,7 @@
 #include <esp_log.h>
 
 #include "ase_config.h"
+#include "task_notif_indexes.h"
 
 void meta_detection_task(void * pvParameters);
 
