@@ -1,16 +1,53 @@
 #include "obstacle_avoidance.h"
 
+QueueHandle_t sonar_queue_h;
+TaskHandle_t sonar_task_h;
+
+
 static void inline setServo(int16_t angle, TaskHandle_t sonar_task_h)
 {
     xTaskNotifyIndexed(sonar_task_h, SONAR_SET_SERVO_ANGLE_NOTIF_IDX, (uint32_t)angle, eSetValueWithOverwrite);
     xTaskNotifyWaitIndexed(MAIN_SERVO_ANGLE_READY, 0x00, 0x00, NULL, portMAX_DELAY);
 }
 
-static float inline getDistance(QueueHandle_t q, uint32_t wait_ms)
+static ultrasonic_measurement_t inline getDistance(QueueHandle_t q, uint32_t wait_ms)
 {
     static ultrasonic_measurement_t measurement;
+    
     xQueueReceive(q, &measurement, pdMS_TO_TICKS(wait_ms));
-    return measurement.distance;
+    return measurement;
+}
+
+int8_t scan()
+{
+    bool reached = 0;
+    uint32_t min_distance = 2000;
+    int8_t closest_angle = 80;
+    ultrasonic_measurement_t values;
+    int8_t angle_dir = 1;
+    static const int16_t scan_range_one_way = 80;
+    int16_t servo_angle = -scan_range_one_way;
+
+    while(servo_angle <= scan_range_one_way)
+    {
+        setServo(servo_angle, sonar_task_h);
+
+        values = getDistance(sonar_queue_h, 300);
+
+        vTaskDelay(20);
+
+        if(values.distance < min_distance)
+        {
+            min_distance = values.distance;
+            closest_angle = values.angle;
+        }
+
+        servo_angle += 10;
+        
+    }
+
+    setServo(closest_angle, sonar_task_h);
+    return closest_angle;
 }
 
 void obstacle_avoidance_task(void *pvParameters)
@@ -29,29 +66,51 @@ void obstacle_avoidance_task(void *pvParameters)
                         (1ULL << IR_TOP_FRONT_GPIO)};
 
     ESP_ERROR_CHECK(gpio_config(&io_conf));
-    QueueHandle_t sonar_queue_h = xQueueCreate(1, sizeof(ultrasonic_measurement_t));
+    
+    sonar_queue_h = xQueueCreate(1, sizeof(ultrasonic_measurement_t));
+
+    sonar_task_ctx_t sonar_task_ctx = {
+        .masurements_queue_h            = sonar_queue_h,
+        .servo_angle_ready_notif_task_h = xTaskGetCurrentTaskHandle()};
+    xTaskCreate(&ultrasonic_sensor_task, "sonar", 8192, (void *)&sonar_task_ctx, 10, &sonar_task_h);
+
     if (sonar_queue_h == NULL)
     {
         ESP_LOGE(OBSTACLE_AVOIDANCE_LOG_TAG, "Failed to create sonar queue!");
         abort();
     }
-    sonar_task_ctx_t sonar_task_ctx = {
-        .masurements_queue_h            = sonar_queue_h,
-        .servo_angle_ready_notif_task_h = xTaskGetCurrentTaskHandle()};
-    TaskHandle_t sonar_task_h;
-    xTaskCreate(&ultrasonic_sensor_task, "sonar", 4096, (void *)&sonar_task_ctx, 10, sonar_task_h);
 
-    int16_t servo_angle         = 50;
     float   ultrasonic_distance = 0.f;
 
     uint8_t  ir_f                   = 0;
     uint8_t  ir_l                   = 0;
     uint8_t  ir_r                   = 0;
     uint32_t orchestrator_notif_val = 0;
-    uint8_t  active                 = 0;
+    uint8_t  active                 = 1;
+
+        //SET_BIT(mc->cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);
+        //send_mot_spd(mc_q_h, mc, 0.0, 1.0, pdMS_TO_TICKS(0));  
+
     for (;;)
     {
-        if (xTaskNotifyWait(0x00, ULONG_MAX, &orchestrator_notif_val, pdMS_TO_TICKS(0)) == pdTRUE)
+        int turn = scan();
+        //turn = turn - 80;
+        if(turn > 5)
+        {
+            SET_BIT(mc->cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);
+            send_mot_spd(mc_q_h, mc, -1.0, 1.0, pdMS_TO_TICKS(0));
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+        else if(turn < -5)
+        {
+            SET_BIT(mc->cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);
+            send_mot_spd(mc_q_h, mc, 1.0, -1.0, pdMS_TO_TICKS(0));
+            vTaskDelay(pdMS_TO_TICKS(100)); 
+        }
+      send_mot_spd(mc_q_h, mc, 0.0, 0.0, pdMS_TO_TICKS(0));
+      turn = 80;     
+      
+       /* if (xTaskNotifyWait(0x00, ULONG_MAX, &orchestrator_notif_val, pdMS_TO_TICKS(0)) == pdTRUE)
         {
             ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Notify received: %lu", orchestrator_notif_val);
             active = orchestrator_notif_val == AVOIDANCE_STATE_ACTIVE;
@@ -63,8 +122,10 @@ void obstacle_avoidance_task(void *pvParameters)
 
         if (active)
         {
-            setServo(servo_angle, sonar_task_h);
-            ultrasonic_distance = getDistance(sonar_queue_h, 1000);
+            
+            SET_BIT(mc->cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);
+            send_mot_spd(mc_q_h, mc, 220.0, 220.0, pdMS_TO_TICKS(0));
+
 
             // Mr Kamil please code your logic here :)
             // Move motors using command below
@@ -72,8 +133,8 @@ void obstacle_avoidance_task(void *pvParameters)
             // This one to stop the motors -> CLEAR_BIT(mc->cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);
             // But they will take effect ONLY after calling the one below!!!
             // send_mot_spd(mc_q_h, mc, 0.0, 0.0, pdMS_TO_TICKS(0));
-        }
+        }*/
 
-        vTaskDelay(pdMS_TO_TICKS(40));
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }

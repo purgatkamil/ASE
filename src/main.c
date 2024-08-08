@@ -101,12 +101,12 @@ void app_main()
     static TaskHandle_t avoidance_task_h;
 
     ////////////////////////////////// TASKS CREATION //////////////////////////////////
-    xTaskCreate(&motor_control_task, "motor_ctrl", 4096, (void *)motors_control_queue_h, 15, NULL);
-    xTaskCreate(&line_follower_task, "line_follow", 4096, (void *)&lf_ctx, 17, &lf_task_h);
-    xTaskCreate(&obstacle_avoidance_task, "avoidance", 4096, (void *)&avoidance_ctx, 17, &avoidance_task_h);
-    xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, (void *)&bt_ctx, 3, NULL, 0);
-    xTaskCreate(&meta_detection_task, "meta-detect", 3048,
-                (void *)current_task_h, 11, NULL);
+    xTaskCreate(&motor_control_task, "motor_ctrl", 8192, (void *)motors_control_queue_h, 15, NULL);
+    //xTaskCreate(&line_follower_task, "line_follow", 4096, (void *)&lf_ctx, 17, &lf_task_h);
+    xTaskCreate(&obstacle_avoidance_task, "avoidance", 8192, (void *)&avoidance_ctx, 17, &avoidance_task_h);
+    //xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, (void *)&bt_ctx, 3, NULL, 0);
+    //xTaskCreate(&meta_detection_task, "meta-detect", 3048,
+                //(void *)current_task_h, 11, NULL);
     /////////////////////////////////////////////////////////////////////////////////////
 
     // uint32_t            any_bottom_ir_active = 0;

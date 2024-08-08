@@ -106,13 +106,13 @@
 
 // Time that is waited before taking measurement after commanding
 // new servo position (to make sure servo has enough time to move)
-#define DELAY_AFTER_SERVO_MOVEMENT_MS 20
+#define DELAY_AFTER_SERVO_MOVEMENT_MS 10
 
 // Maximum distance that is propagated further onto the system
 // bigger values are still measured, but they are not passed
 // to queue that is then processed in main task.
 // This approach should minimise amount of glitched readings.
-#define SONAR_MAX_DISTANCE_CM 150
+#define SONAR_MAX_DISTANCE_CM 300
 
 // If not commented servo will be scanning, otherwise fixed to 0 degrees.
 // #define ENABLE_SERVO_MOVEMENT
