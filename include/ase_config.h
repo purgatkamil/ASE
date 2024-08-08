@@ -101,18 +101,18 @@
 
 #define SERVO_MIN_PULSEWIDTH_US 500  // Minimum pulse width in microsecond
 #define SERVO_MAX_PULSEWIDTH_US 2500 // Maximum pulse width in microsecond
-#define SERVO_MIN_DEGREE        -180 // Minimum angle
-#define SERVO_MAX_DEGREE        180  // Maximum angle
+#define SERVO_MIN_DEGREE        -90  // Minimum angle
+#define SERVO_MAX_DEGREE        90   // Maximum angle
 
 // Time that is waited before taking measurement after commanding
 // new servo position (to make sure servo has enough time to move)
-#define DELAY_AFTER_SERVO_MOVEMENT_MS 20
+#define DELAY_AFTER_SERVO_MOVEMENT_MS 70
 
 // Maximum distance that is propagated further onto the system
 // bigger values are still measured, but they are not passed
 // to queue that is then processed in main task.
 // This approach should minimise amount of glitched readings.
-#define SONAR_MAX_DISTANCE_CM 150
+#define SONAR_MAX_DISTANCE_CM 300
 
 // If not commented servo will be scanning, otherwise fixed to 0 degrees.
 // #define ENABLE_SERVO_MOVEMENT

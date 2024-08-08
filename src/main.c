@@ -111,10 +111,11 @@ void app_main()
 
     // uint32_t            any_bottom_ir_active = 0;
     static bt_com_msg_t bt_msg_rcv;
-    mission_state_t     current_state              = MISSION_STATE_IDLE;
-    mission_state_t     new_state                  = MISSION_STATE_AVOID_OBSTACLE;
+    mission_state_t     current_state = MISSION_STATE_IDLE;
+    // mission_state_t     new_state     = MISSION_STATE_IDLE;
+    mission_state_t new_state = MISSION_STATE_AVOID_OBSTACLE;
     // TickType_t          ticks_when_quitted         = 0;
-    uint8_t             change_next_lf_turning_dir = 0;
+    uint8_t change_next_lf_turning_dir = 0;
     // int64_t             time_mission_start         = 0;
     // bool                celebrated_once            = false;
     for (;;)
@@ -131,7 +132,7 @@ void app_main()
             {
                 // Enable line-following mode
                 MOTORS_CMD(true, 0.8, 0.8, pdMS_TO_TICKS(0));
-                new_state          = MISSION_STATE_FOLLOW_LINE;
+                new_state = MISSION_STATE_FOLLOW_LINE;
                 // time_mission_start = xx_time_get_time();
             }
             else if (m == 3)
@@ -139,6 +140,15 @@ void app_main()
                 // Enable STOP mode;
                 new_state = MISSION_STATE_STOP;
                 MOTORS_CMD(false, 0.0, 0.0, pdMS_TO_TICKS(5000));
+            }
+            else if (m == 2)
+            {
+                // Start obstacle avoidance
+                new_state = MISSION_STATE_AVOID_OBSTACLE;
+            }
+            else if (m == 1)
+            {
+                new_state = MISSION_STATE_IDLE;
             }
         }
 
@@ -241,6 +251,7 @@ void app_main()
             }
             MOTORS_CMD(false, 0.0, 0.0, pdMS_TO_TICKS(10000));
             new_state = MISSION_STATE_STOP;
+            break;
 
         case MISSION_STATE_STOP:
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - STOP");
