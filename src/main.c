@@ -3,10 +3,13 @@
 #include "freertos/task.h"
 
 #include <driver/gpio.h>
+#include <sys/time.h>
 
 #include "ase_config.h"
 #include "ase_typedefs.h"
+#ifdef COMPILE_BLUETOOTH
 #include "bluetooth_com.h"
+#endif
 #include "helpers.h"
 #include "line_follow.h"
 #include "meta_detection.h"
@@ -27,6 +30,7 @@
     } while (0)
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
+#ifdef COMPILE_BLUETOOTH
 static QueueHandle_t bt_tosend_h;
 
 #ifdef LOG_OVER_BLUETOOTH
@@ -44,6 +48,7 @@ static int dual_vprintf(const char *fmt, va_list ap)
 
     return vprintf(fmt, ap);
 }
+#endif
 #endif
 
 int64_t xx_time_get_time()
@@ -64,6 +69,7 @@ void app_main()
         abort();
     }
 
+#ifdef COMPILE_BLUETOOTH
     static QueueHandle_t bt_rcv_h;
     bt_rcv_h    = xQueueCreate(5, sizeof(bt_com_msg_t));
     bt_tosend_h = xQueueCreate(35, sizeof(bt_com_msg_t));
@@ -77,7 +83,7 @@ void app_main()
     esp_log_level_set(META_DETECTION_LOG_TAG, ESP_LOG_NONE);
     esp_log_level_set(SONAR_SERVO_LOG_TAG, ESP_LOG_NONE);
 #endif
-
+#endif
     motors_control_msg_t motors_control = {
         .speed_cmd = {
             .left  = 0.85f,
@@ -88,9 +94,11 @@ void app_main()
         .mot_ctrl_msg     = &motors_control,
         .main_task_h      = current_task_h};
 
+#ifdef COMPILE_BLUETOOTH
     bt_com_task_ctx_t bt_ctx = {
         .q_rcv_h    = bt_rcv_h,
         .q_tosend_h = bt_tosend_h};
+#endif
 
     obstacle_avoidance_ctx_t avoidance_ctx = {
         .mot_cmd_q_handle = motors_control_queue_h,
@@ -104,13 +112,17 @@ void app_main()
     xTaskCreate(&motor_control_task, "motor_ctrl", 4096, (void *)motors_control_queue_h, 15, NULL);
     xTaskCreate(&line_follower_task, "line_follow", 4096, (void *)&lf_ctx, 17, &lf_task_h);
     xTaskCreate(&obstacle_avoidance_task, "avoidance", 4096, (void *)&avoidance_ctx, 17, &avoidance_task_h);
+#ifdef COMPILE_BLUETOOTH
     xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, (void *)&bt_ctx, 3, NULL, 0);
+#endif
     xTaskCreate(&meta_detection_task, "meta-detect", 3048,
                 (void *)current_task_h, 11, NULL);
     /////////////////////////////////////////////////////////////////////////////////////
 
     // uint32_t            any_bottom_ir_active = 0;
+    #ifdef COMPILE_BLUETOOTH
     static bt_com_msg_t bt_msg_rcv;
+    #endif
     mission_state_t     current_state = MISSION_STATE_IDLE;
     // mission_state_t     new_state     = MISSION_STATE_IDLE;
     mission_state_t new_state = MISSION_STATE_AVOID_OBSTACLE;
@@ -120,6 +132,7 @@ void app_main()
     // bool                celebrated_once            = false;
     for (;;)
     {
+#ifdef COMPILE_BLUETOOTH
         if (xQueueReceive(bt_rcv_h, &bt_msg_rcv, pdMS_TO_TICKS(0)) == pdTRUE)
         {
             ESP_LOGI(MAIN_TASK_LOG_TAG, "Bt msg received (len=%d)", bt_msg_rcv.len);
@@ -151,6 +164,7 @@ void app_main()
                 new_state = MISSION_STATE_IDLE;
             }
         }
+#endif
 
         // if (xTaskNotifyWaitIndexed(MAIN_BOTTOM_IR_ACTIVITY_NOTIF_IDX,
         //                            0x00, ULONG_MAX, &any_bottom_ir_active, pdTICKS_TO_MS(0)) == pdTRUE)
