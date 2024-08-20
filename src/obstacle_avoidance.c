@@ -26,18 +26,20 @@ static float inline getDistance(QueueHandle_t q, uint32_t wait_ms, bool *success
 static uint8_t align_count        = 0;
 static uint8_t no_move_scan_count = 0;
 static bool    moved_once         = 0;
+static int16_t scan_range_one_way = 50;
 
 static inline void reset_scan_params()
 {
-    align_count = 0;
-    moved_once  = 0;
+    align_count        = 0;
+    moved_once         = 0;
+    no_move_scan_count = 0;
+    scan_range_one_way = 50;
 }
 
 static int8_t scan()
 {
-    float   distance           = 0.0;
-    int16_t scan_range_one_way = 50;
-    int16_t servo_angle        = -scan_range_one_way;
+    float   distance    = 0.0;
+    int16_t servo_angle = -scan_range_one_way;
 
     float   min_distance     = SONAR_MAX_DISTANCE_CM;
     int16_t closest_angle    = 0;
@@ -77,6 +79,42 @@ static int8_t scan()
     return closest_angle;
 }
 
+static int8_t set_at_angle_to_obstacle(int8_t angle, bool *completed)
+{
+    int turn = scan();
+    if (moved_once && (turn >= (15 + angle) || turn <= -(15 + angle)))
+    {
+        align_count++;
+    }
+    else if (turn <= (15 + angle) && turn >= -(15 + angle))
+    {
+        no_move_scan_count++;
+    }
+    if (no_move_scan_count > 3)
+    {
+        ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Can continue mission!");
+        *completed = true;
+        return 0;
+    }
+    if (moved_once && align_count >= 3)
+    {
+        ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Found optimal position, carry on!");
+        *completed = true;
+        turn       = 0;
+        return 0;
+    }
+    if (turn < (angle + 2))
+    {
+        return 1;
+    }
+    else if (turn > -(angle + 2))
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
 void obstacle_avoidance_task(void *pvParameters)
 {
     obstacle_avoidance_ctx_t *oa_ctx = (obstacle_avoidance_ctx_t *)pvParameters;
@@ -109,11 +147,15 @@ void obstacle_avoidance_task(void *pvParameters)
         .servo_angle_ready_notif_task_h = xTaskGetCurrentTaskHandle()};
     xTaskCreate(&ultrasonic_sensor_task, "sonar", 4096, (void *)&sonar_task_ctx, 10, &sonar_task_h);
 
-    uint8_t  ir_f                   = 0;
-    uint8_t  ir_l                   = 0;
-    uint8_t  ir_r                   = 0;
+    // uint8_t  ir_f                   = 0;
+    // uint8_t  ir_l                   = 0;
+    // uint8_t  ir_r                   = 0;
     uint32_t orchestrator_notif_val = 0;
     uint8_t  active                 = 0;
+
+    bool    completed_setting_at_angle = false;
+    uint8_t setting_at_angle_ctr       = 0;
+    uint8_t target_angle_to_obstacle   = 0;
     for (;;)
     {
         if (xTaskNotifyWait(0x00, ULONG_MAX, &orchestrator_notif_val, pdMS_TO_TICKS(0)) == pdTRUE)
@@ -123,49 +165,56 @@ void obstacle_avoidance_task(void *pvParameters)
             if (active)
             {
                 reset_scan_params();
+                completed_setting_at_angle = false;
+                setting_at_angle_ctr       = 0;
+                target_angle_to_obstacle   = 0;
             }
         }
 
-        ir_l = 1 - gpio_get_level(IR_TOP_LEFT_GPIO);
-        ir_f = 1 - gpio_get_level(IR_TOP_FRONT_GPIO);
-        ir_r = 1 - gpio_get_level(IR_TOP_RIGHT_GPIO);
+        // ir_l = 1 - gpio_get_level(IR_TOP_LEFT_GPIO);
+        // ir_f = 1 - gpio_get_level(IR_TOP_FRONT_GPIO);
+        // ir_r = 1 - gpio_get_level(IR_TOP_RIGHT_GPIO);
 
-        if (active)
+        if (active && setting_at_angle_ctr == 0 && completed_setting_at_angle)
         {
-#define TOLERANCE 2
-            int turn = scan();
-            if (moved_once && (turn >= 15 || turn <= -15))
-            {
-                align_count++;
-            }
-            else if (turn <= 15 && turn >= -15)
-            {
-                no_move_scan_count++;
-            }
-            if (no_move_scan_count > 3)
-            {
-                ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Can continue mission!");
-            }
-            if (moved_once && align_count >= 3)
-            {
-                ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Found optimal position, carry on!");
-                turn = 0;
-            }
-            if (turn >= TOLERANCE)
-            {
-                SET_BIT(mc->cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);
-                send_mot_spd(mc_q_h, mc, -1.0, 1.0, pdMS_TO_TICKS(0));
-                moved_once = 1;
-                vTaskDelay(pdMS_TO_TICKS(100));
-            }
-            else if (turn <= -TOLERANCE)
+            completed_setting_at_angle = 0;
+            setting_at_angle_ctr       = 1;
+            reset_scan_params();
+            target_angle_to_obstacle   = 70;
+            scan_range_one_way         = 90;
+            ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Completed setting at angle (0)");
+        }
+
+        if (active && setting_at_angle_ctr == 1 && completed_setting_at_angle)
+        {
+            // completed_setting_at_angle = 0;
+            setting_at_angle_ctr = 2;
+            ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Completed setting at angle (1)");
+
+        }
+
+        if (active && !completed_setting_at_angle)
+        {
+            static int8_t facing_movement_dir;
+            facing_movement_dir = set_at_angle_to_obstacle(target_angle_to_obstacle,
+                                                           &completed_setting_at_angle);
+
+            // Movement needed if movement dir is not zero
+            if (facing_movement_dir != 0)
             {
                 SET_BIT(mc->cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);
-                send_mot_spd(mc_q_h, mc, 1.0, -1.0, pdMS_TO_TICKS(0));
-                moved_once = 1;
+                if (facing_movement_dir < 0)
+                {
+                    send_mot_spd(mc_q_h, mc, -1.0, 1.0, pdMS_TO_TICKS(0));
+                }
+                else if (facing_movement_dir > 0)
+                {
+                    send_mot_spd(mc_q_h, mc, 1.0, -1.0, pdMS_TO_TICKS(0));
+                }
                 vTaskDelay(pdMS_TO_TICKS(100));
+                moved_once = 1;
+                send_mot_spd(mc_q_h, mc, 0.0, 0.0, pdMS_TO_TICKS(0));
             }
-            send_mot_spd(mc_q_h, mc, 0.0, 0.0, pdMS_TO_TICKS(0));
         }
 
         vTaskDelay(pdMS_TO_TICKS(700));

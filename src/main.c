@@ -124,8 +124,8 @@ void app_main()
     static bt_com_msg_t bt_msg_rcv;
     #endif
     mission_state_t     current_state = MISSION_STATE_IDLE;
-    // mission_state_t     new_state     = MISSION_STATE_IDLE;
-    mission_state_t new_state = MISSION_STATE_AVOID_OBSTACLE;
+    mission_state_t     new_state     = MISSION_STATE_IDLE;
+    // mission_state_t new_state = MISSION_STATE_AVOID_OBSTACLE;
     // TickType_t          ticks_when_quitted         = 0;
     uint8_t change_next_lf_turning_dir = 0;
     // int64_t             time_mission_start         = 0;
