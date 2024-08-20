@@ -170,9 +170,16 @@ void ultrasonic_sensor_task(void *pvParameters)
             sonar_meas.angle    = angle;
             sonar_meas.distance = distance;
 
-            ESP_LOGI(SONAR_SERVO_LOG_TAG, "Ultrasonic measurement at angle %d deg: %fcm",
-                     angle,
-                     distance);
+#ifdef ENABLE_TELEPLOT_PRINTS
+            static int64_t timestamp;
+            timestamp = get_sys_timestamp();
+            printf(">sonar_dist:%" PRIu64 ":%f|g\n", timestamp, distance);
+            printf(">sonar_angle:%" PRIu64 ":%d|g\n", timestamp, angle);
+#endif
+
+            // ESP_LOGI(SONAR_SERVO_LOG_TAG, "Ultrasonic measurement at angle %d deg: %fcm",
+            //          angle,
+            //          distance);
 
             // Saving only current measurement to the queue
             xQueueOverwrite(sonar_queue_h, &sonar_meas);

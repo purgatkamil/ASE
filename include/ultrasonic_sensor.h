@@ -14,6 +14,7 @@
 #include "ase_config.h"
 #include "ase_typedefs.h"
 #include "task_notif_indexes.h"
+#include "helpers.h"
 
 typedef struct
 {

@@ -5,6 +5,8 @@
 #include "ase_typedefs.h"
 #include "freertos/FreeRTOS.h"
 
+#include <sys/time.h>
+
 // Bitwise operations macros to easy
 // set flags in motor control structure
 #define SET_BIT(var, mask)    ((var) |= (mask))
@@ -49,4 +51,7 @@ static inline BaseType_t send_mot_spd(
     mc->speed_cmd.right = spdRight;
     return xQueueSend(q, mc, q_wait_ticks);
 }
+
+int64_t get_sys_timestamp();
+
 #endif
