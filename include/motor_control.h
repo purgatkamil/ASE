@@ -13,6 +13,14 @@
 #include "ase_typedefs.h"
 #include "helpers.h"
 
-void motor_control_task(void *pvParameters);
+void mc_enable_pwm(bool enable);
+
+// Left and right duty are in range [-1; 1]
+// The sign determines direction:
+//  positive -> forward
+//  negative -> backward
+void mc_set_duty(double left, double right);
+
+void mc_motor_control_task(void *pvParameters);
 
 #endif

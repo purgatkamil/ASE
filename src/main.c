@@ -18,18 +18,6 @@
 #include "state_transitions.h"
 #include "task_notif_indexes.h"
 
-//////////////////////// HELPER MACROS ////////////////////////////////////////////////////////
-#define MOTORS_CMD(enable, left, right, d)                                     \
-    do                                                                         \
-    {                                                                          \
-        if (enable)                                                            \
-            SET_BIT(motors_control.cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);    \
-        else                                                                   \
-            CLEAR_BIT(motors_control.cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);  \
-        send_mot_spd(motors_control_queue_h, &motors_control, left, right, d); \
-    } while (0)
-////////////////////////////////////////////////////////////////////////////////////////////////
-
 #ifdef COMPILE_BLUETOOTH
 static QueueHandle_t bt_tosend_h;
 
@@ -62,13 +50,6 @@ void app_main()
 {
     const TaskHandle_t current_task_h = xTaskGetCurrentTaskHandle();
 
-    QueueHandle_t motors_control_queue_h = xQueueCreate(10, sizeof(motors_control_msg_t));
-    if (motors_control_queue_h == NULL)
-    {
-        ESP_LOGE(MAIN_TASK_LOG_TAG, "Failed to create motors_control_queue_h!");
-        abort();
-    }
-
 #ifdef COMPILE_BLUETOOTH
     static QueueHandle_t bt_rcv_h;
     bt_rcv_h    = xQueueCreate(5, sizeof(bt_com_msg_t));
@@ -84,15 +65,9 @@ void app_main()
     esp_log_level_set(SONAR_SERVO_LOG_TAG, ESP_LOG_NONE);
 #endif
 #endif
-    motors_control_msg_t motors_control = {
-        .speed_cmd = {
-            .left  = 0.85f,
-            .right = 0.85f}};
 
     line_follower_task_context_t lf_ctx = {
-        .mot_cmd_q_handle = motors_control_queue_h,
-        .mot_ctrl_msg     = &motors_control,
-        .main_task_h      = current_task_h};
+        .main_task_h = current_task_h};
 
 #ifdef COMPILE_BLUETOOTH
     bt_com_task_ctx_t bt_ctx = {
@@ -101,15 +76,13 @@ void app_main()
 #endif
 
     obstacle_avoidance_ctx_t avoidance_ctx = {
-        .mot_cmd_q_handle = motors_control_queue_h,
-        .mot_ctrl_msg     = &motors_control,
-        .main_task_h      = current_task_h};
+        .main_task_h = current_task_h};
 
     static TaskHandle_t lf_task_h;
     static TaskHandle_t avoidance_task_h;
 
     ////////////////////////////////// TASKS CREATION //////////////////////////////////
-    xTaskCreate(&motor_control_task, "motor_ctrl", 4096, (void *)motors_control_queue_h, 15, NULL);
+    xTaskCreate(&mc_motor_control_task, "motor_ctrl", 4096, NULL, 15, NULL);
     xTaskCreate(&line_follower_task, "line_follow", 4096, (void *)&lf_ctx, 17, &lf_task_h);
     xTaskCreate(&obstacle_avoidance_task, "avoidance", 4096, (void *)&avoidance_ctx, 17, &avoidance_task_h);
 #ifdef COMPILE_BLUETOOTH
@@ -117,14 +90,14 @@ void app_main()
 #endif
     xTaskCreate(&meta_detection_task, "meta-detect", 3048,
                 (void *)current_task_h, 11, NULL);
-    /////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////
 
-    // uint32_t            any_bottom_ir_active = 0;
-    #ifdef COMPILE_BLUETOOTH
+// uint32_t            any_bottom_ir_active = 0;
+#ifdef COMPILE_BLUETOOTH
     static bt_com_msg_t bt_msg_rcv;
-    #endif
-    mission_state_t     current_state = MISSION_STATE_IDLE;
-    mission_state_t     new_state     = MISSION_STATE_IDLE;
+#endif
+    mission_state_t current_state = MISSION_STATE_IDLE;
+    mission_state_t new_state     = MISSION_STATE_IDLE;
     // mission_state_t new_state = MISSION_STATE_AVOID_OBSTACLE;
     // TickType_t          ticks_when_quitted         = 0;
     uint8_t change_next_lf_turning_dir = 0;
@@ -144,7 +117,8 @@ void app_main()
             if (m == 4)
             {
                 // Enable line-following mode
-                MOTORS_CMD(true, 0.8, 0.8, pdMS_TO_TICKS(0));
+                mc_enable_pwm(true);
+                mc_set_duty(0.8, 0.8);
                 new_state = MISSION_STATE_FOLLOW_LINE;
                 // time_mission_start = xx_time_get_time();
             }
@@ -152,12 +126,14 @@ void app_main()
             {
                 // Enable STOP mode;
                 new_state = MISSION_STATE_STOP;
-                MOTORS_CMD(false, 0.0, 0.0, pdMS_TO_TICKS(5000));
+                mc_enable_pwm(false);
             }
             else if (m == 2)
             {
                 // Start obstacle avoidance
-                new_state = MISSION_STATE_AVOID_OBSTACLE;
+                // new_state = MISSION_STATE_AVOID_OBSTACLE;
+                mc_enable_pwm(true);
+                mc_set_duty(1.0, 1.0);
             }
             else if (m == 1)
             {
@@ -258,26 +234,25 @@ void app_main()
             static size_t i = 0;
             for (i = 0; i < 7; i++)
             {
-                MOTORS_CMD(true, -0.8, 0.8, pdMS_TO_TICKS(0));
+                mc_set_duty(-0.8, 0.8);
                 vTaskDelay(pdMS_TO_TICKS(200));
-                MOTORS_CMD(true, 0.8, -0.8, pdMS_TO_TICKS(0));
+                mc_set_duty(0.8, -0.8);
                 vTaskDelay(pdMS_TO_TICKS(200));
             }
-            MOTORS_CMD(false, 0.0, 0.0, pdMS_TO_TICKS(10000));
+            mc_enable_pwm(false);
             new_state = MISSION_STATE_STOP;
             break;
 
         case MISSION_STATE_STOP:
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - STOP");
-            MOTORS_CMD(false, 0.0, 0.0, pdMS_TO_TICKS(5000));
-
+            mc_enable_pwm(false);
         default:
             break;
         }
 
         current_state = new_state;
 
-        vTaskDelay(pdMS_TO_TICKS(50));
+        vTaskDelay(pdMS_TO_TICKS(80));
     }
 }
 //*/

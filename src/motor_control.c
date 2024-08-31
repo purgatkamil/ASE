@@ -1,5 +1,37 @@
 #include "motor_control.h"
 
+typedef struct
+{
+    bool   enable;
+    double left;
+    double right;
+} mc_input_t;
+
+static QueueHandle_t mc_queue_h;
+static mc_input_t    mc_input = {
+       .enable = false,
+       .left   = 0.0,
+       .right  = 0.0,
+};
+
+void mc_enable_pwm(bool enable)
+{
+    mc_input.enable = enable;
+    if (!enable)
+    {
+        mc_input.left  = 0.0;
+        mc_input.right = 0.0;
+    }
+    xQueueSend(mc_queue_h, &mc_input, 0);
+}
+
+void mc_set_duty(double left, double right)
+{
+    mc_input.left  = left;
+    mc_input.right = right;
+    xQueueSend(mc_queue_h, &mc_input, 0);
+}
+
 static void enable_start_mcpwm_tim(mcpwm_timer_handle_t tim_h)
 {
     ESP_LOGI(MOTOR_CONTROL_LOG_TAG, "Enable and start MCPWM timer");
@@ -7,12 +39,12 @@ static void enable_start_mcpwm_tim(mcpwm_timer_handle_t tim_h)
     ESP_ERROR_CHECK(mcpwm_timer_start_stop(tim_h, MCPWM_TIMER_START_NO_STOP));
 }
 
-static void disable_mcpwm_tim(mcpwm_timer_handle_t tim_h)
-{
-    ESP_LOGI(MOTOR_CONTROL_LOG_TAG, "Stop and disable MCPWM timer");
-    mcpwm_timer_start_stop(tim_h, MCPWM_TIMER_START_STOP_FULL);
-    ESP_ERROR_CHECK(mcpwm_timer_disable(tim_h));
-}
+// static void disable_mcpwm_tim(mcpwm_timer_handle_t tim_h)
+// {
+//     ESP_LOGI(MOTOR_CONTROL_LOG_TAG, "Stop and disable MCPWM timer");
+//     ESP_ERROR_CHECK(mcpwm_timer_start_stop(tim_h, MCPWM_TIMER_STOP_FULL));
+//     ESP_ERROR_CHECK(mcpwm_timer_disable(tim_h));
+// }
 
 static void create_tim_oper(mcpwm_timer_handle_t *tim_h, mcpwm_oper_handle_t *oper)
 {
@@ -37,7 +69,10 @@ static void create_tim_oper(mcpwm_timer_handle_t *tim_h, mcpwm_oper_handle_t *op
     ESP_ERROR_CHECK(mcpwm_operator_connect_timer(*oper, *tim_h));
 }
 
-static void conf_mcpwm_gen_cmp(mcpwm_oper_handle_t oper, mcpwm_cmpr_handle_t *cmp_h, int gpio_num)
+static void conf_mcpwm_gen_cmp(mcpwm_oper_handle_t  oper,
+                               mcpwm_gen_handle_t  *generator_h,
+                               mcpwm_cmpr_handle_t *cmp_h,
+                               int                  gpio_num)
 {
     ESP_LOGI(MOTOR_CONTROL_LOG_TAG, "Create comparator and generator from the operator (GPIO %d)", gpio_num);
 
@@ -51,15 +86,15 @@ static void conf_mcpwm_gen_cmp(mcpwm_oper_handle_t oper, mcpwm_cmpr_handle_t *cm
     mcpwm_generator_config_t generator_config = {
         .gen_gpio_num = gpio_num,
     };
-    mcpwm_gen_handle_t generator = NULL;
-    ESP_ERROR_CHECK(mcpwm_new_generator(oper, &generator_config, &generator));
+
+    ESP_ERROR_CHECK(mcpwm_new_generator(oper, &generator_config, generator_h));
 
     ESP_LOGI(MOTOR_CONTROL_LOG_TAG, "Set generator action on timer and compare event (GPIO %d)", gpio_num);
     // go high on counter empty
-    ESP_ERROR_CHECK(mcpwm_generator_set_action_on_timer_event(generator,
+    ESP_ERROR_CHECK(mcpwm_generator_set_action_on_timer_event(*generator_h,
                                                               MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH)));
     // go low on compare threshold
-    ESP_ERROR_CHECK(mcpwm_generator_set_action_on_compare_event(generator,
+    ESP_ERROR_CHECK(mcpwm_generator_set_action_on_compare_event(*generator_h,
                                                                 MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, *cmp_h, MCPWM_GEN_ACTION_LOW)));
 }
 
@@ -96,7 +131,7 @@ static uint32_t control_to_cmp_ticks(double control)
     return (uint32_t)(absed * (double)MCPWM_PERIOD_TICKS);
 }
 
-static void set_dir_control_based(double control, gpio_num_t IN1, gpio_num_t IN2)
+static inline void set_dir_control_based(double control, gpio_num_t IN1, gpio_num_t IN2)
 {
     if (control < 0)
         motor_mode_set_cwise(IN1, IN2);
@@ -104,68 +139,83 @@ static void set_dir_control_based(double control, gpio_num_t IN1, gpio_num_t IN2
         motor_mode_set_ccwise(IN1, IN2);
 }
 
-void motor_control_task(void *pvParameters)
+void mc_motor_control_task(void *pvParameters)
 {
-    mcpwm_timer_handle_t tim_h = NULL;
-    mcpwm_oper_handle_t  oper  = NULL;
-    create_tim_oper(&tim_h, &oper);
+    mcpwm_timer_handle_t tim_h  = NULL;
+    mcpwm_oper_handle_t  oper_h = NULL;
+    create_tim_oper(&tim_h, &oper_h);
 
+    mcpwm_gen_handle_t  genl_h       = NULL;
+    mcpwm_gen_handle_t  genr_h       = NULL;
     mcpwm_cmpr_handle_t cmp_mleft_h  = NULL;
     mcpwm_cmpr_handle_t cmp_mright_h = NULL;
 
-    conf_mcpwm_gen_cmp(oper, &cmp_mleft_h, MOTOR_LEFT_EN_GPIO);
-    conf_mcpwm_gen_cmp(oper, &cmp_mright_h, MOTOR_RIGHT_EN_GPIO);
+    conf_mcpwm_gen_cmp(oper_h, &genl_h, &cmp_mleft_h, MOTOR_LEFT_EN_GPIO);
+    conf_mcpwm_gen_cmp(oper_h, &genr_h, &cmp_mright_h, MOTOR_RIGHT_EN_GPIO);
 
     setup_motors_dir_gpio();
 
-    QueueHandle_t motors_control_q_h = (QueueHandle_t)pvParameters;
+    mc_queue_h = xQueueCreate(10, sizeof(mc_input_t));
+    if (mc_queue_h == NULL)
+    {
+        ESP_LOGE(MOTOR_CONTROL_LOG_TAG, "Failed to create mc_queue_h!");
+        abort();
+    }
 
-    motors_control_msg_t motors_control = {
-        .speed_cmd = {
-            .left  = 0.0f,
-            .right = 0.0f}};
-    CLEAR_BIT(motors_control.cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);
-
-    bool timer_enabled = false;
+    mc_input_t mc_msg = {
+        .enable = false,
+        .left   = 0.0,
+        .right  = 0.0,
+    };
+    // bool timer_enabled = false;
+    enable_start_mcpwm_tim(tim_h);
     for (;;)
     {
-        if (xQueueReceive(motors_control_q_h, &motors_control, portMAX_DELAY) == pdTRUE)
+        if (xQueueReceive(mc_queue_h, &mc_msg, portMAX_DELAY) == pdTRUE)
         {
             // New control message has been issued
-            bool enable_motors = IS_BIT_SET(motors_control.cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);
-            if (enable_motors && !timer_enabled)
-            {
-                enable_start_mcpwm_tim(tim_h);
-                timer_enabled = 1;
-            }
-            else if (!enable_motors && timer_enabled)
-            {
-                disable_mcpwm_tim(tim_h);
-                timer_enabled = 0;
-            }
+            // if (mc_msg.enable && !timer_enabled)
+            // {
+            //     // enable_start_mcpwm_tim(tim_h);
+            //     // mcpwm_generator_set_force_level(genl_h, -1, false);
+            //     // mcpwm_generator_set_force_level(genr_h, -1, false);
+            //     // timer_enabled = 1;
+            // }
+            // else if (!mc_msg.enable && timer_enabled)
+            // {
+            //     // disable_mcpwm_tim(tim_h);
+            //     // // Overwrite commanded values just in case,
+            //     // // as disabling timer with full input
+            //     // mc_msg.left   = 0.0;
+            //     // mc_msg.right  = 0.0;
+            //     // mcpwm_generator_set_force_level(genl_h, 0, true);
+            //     // mcpwm_generator_set_force_level(genr_h, 0, true);
+            //     // timer_enabled = 0;
+            //     // continue;
+            // }
 
             // left motor rotates clockwise for control > 0
             // to simplify control, dirty trick of inverting control
             // signal is applied. in this way control with the same sign
             // allows robot to drive in the same direction. not ideal but helpful
-            motors_control.speed_cmd.right *= -1;
+            mc_msg.right *= -1;
 
             // Set spinning direction based on control sign (positive or negative)
-            set_dir_control_based(motors_control.speed_cmd.left,
+            set_dir_control_based(mc_msg.left,
                                   MOTOR_LEFT_IN1_GPIO,
                                   MOTOR_LEFT_IN2_GPIO);
 
-            set_dir_control_based(motors_control.speed_cmd.right,
+            set_dir_control_based(mc_msg.right,
                                   MOTOR_RIGHT_IN1_GPIO,
                                   MOTOR_RIGHT_IN2_GPIO);
 
             ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(
                 cmp_mleft_h,
-                control_to_cmp_ticks(motors_control.speed_cmd.left)));
+                control_to_cmp_ticks(mc_msg.left)));
 
             ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(
                 cmp_mright_h,
-                control_to_cmp_ticks(motors_control.speed_cmd.right)));
+                control_to_cmp_ticks(mc_msg.right)));
         }
     }
 }
