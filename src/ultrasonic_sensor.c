@@ -1,6 +1,13 @@
 #include "ultrasonic_sensor.h"
 
-static bool ultrasonic_echo_callback(mcpwm_cap_channel_handle_t cap_chan, const mcpwm_capture_event_data_t *edata, void *user_data)
+static TaskHandle_t      sonar_task_h;
+static SemaphoreHandle_t servo_semaphore_h;
+static QueueHandle_t     measurements_queue_h;
+
+static bool ultrasonic_echo_callback(
+    mcpwm_cap_channel_handle_t        cap_chan,
+    const mcpwm_capture_event_data_t *edata,
+    void                             *user_data)
 {
     static uint32_t cap_val_begin_of_sample = 0;
     static uint32_t cap_val_end_of_sample   = 0;
@@ -113,8 +120,30 @@ static inline uint32_t angle_to_duty(int angle)
     return (angle - SERVO_MIN_DEGREE) * (SERVO_MAX_PULSEWIDTH_US - SERVO_MIN_PULSEWIDTH_US) / (SERVO_MAX_DEGREE - SERVO_MIN_DEGREE) + SERVO_MIN_PULSEWIDTH_US;
 }
 
+void sonar_set_servo(int16_t angle)
+{
+    xTaskNotifyIndexed(sonar_task_h, SONAR_SET_SERVO_ANGLE_NOTIF_IDX, (uint32_t)angle, eSetValueWithOverwrite);
+    // Wait for semaphore to become available effectively waiting
+    // for confirmation that servo has achieved desired angle
+    xSemaphoreTake(servo_semaphore_h, portMAX_DELAY);
+}
+
+ultrasonic_measurement_t sonar_get_measurement(uint32_t wait_ms, bool *success)
+{
+    static ultrasonic_measurement_t measurement;
+
+    bool read_ok = xQueueReceive(measurements_queue_h, &measurement, pdMS_TO_TICKS(wait_ms));
+    if (success != NULL)
+    {
+        *success = read_ok;
+    }
+    return measurement;
+}
+
 void ultrasonic_sensor_task(void *pvParameters)
 {
+    sonar_task_h = xTaskGetCurrentTaskHandle();
+
     // Init and start mcpwm capture peripherial used to
     // measure pulse width that ultrasonic sensor returns
     init_start_mcpwm_capture();
@@ -123,18 +152,21 @@ void ultrasonic_sensor_task(void *pvParameters)
     ledc_servo_sonar_init();
 
     sonar_task_ctx_t *ctx                      = (sonar_task_ctx_t *)pvParameters;
-    TaskHandle_t      servo_ready_task_notif_h = ctx->servo_angle_ready_notif_task_h;
+    servo_semaphore_h                          = xSemaphoreCreateBinary();
 
-    // Get handle to the sonar queue that
-    // will hold most recent measurements
-    QueueHandle_t sonar_queue_h = ctx->masurements_queue_h;
+    if (servo_semaphore_h == NULL)
+    {
+        ESP_LOGE(SONAR_SERVO_LOG_TAG, "Failed to create servo semaphore. Aborting!");
+        abort();
+    }
 
+    measurements_queue_h = xQueueCreate(1, sizeof(ultrasonic_measurement_t));
     ultrasonic_measurement_t sonar_meas;
 
-    uint32_t        tof_ticks;
-    uint32_t        servo_duty          = 0;
-    int16_t         angle               = 0;
-    static uint32_t set_servo_notif_val = 0;
+    uint32_t tof_ticks;
+    uint32_t servo_duty          = 0;
+    int16_t  angle               = 0;
+    uint32_t set_servo_notif_val = 0;
 
     for (;;)
     {
@@ -157,7 +189,8 @@ void ultrasonic_sensor_task(void *pvParameters)
             // because servo takes some time to rotate before it can reliably measure
             vTaskDelay(pdMS_TO_TICKS(DELAY_AFTER_SERVO_MOVEMENT_MS));
 
-            xTaskNotifyIndexed(servo_ready_task_notif_h, MAIN_SERVO_ANGLE_READY, 0, eNoAction);
+            // Give semaphore to inform that servo is set to desired angle
+            xSemaphoreGive(servo_semaphore_h);
         }
 
         // There is no point of advancing with servo movement if ultrasonic is not responding
@@ -182,7 +215,7 @@ void ultrasonic_sensor_task(void *pvParameters)
             //          distance);
 
             // Saving only current measurement to the queue
-            xQueueOverwrite(sonar_queue_h, &sonar_meas);
+            xQueueOverwrite(measurements_queue_h, &sonar_meas);
         }
     }
 }

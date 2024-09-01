@@ -1,24 +1,5 @@
 #include "obstacle_avoidance.h"
 
-static QueueHandle_t sonar_queue_h;
-static TaskHandle_t  sonar_task_h;
-
-static void inline setServo(int16_t angle, TaskHandle_t sonar_task_h)
-{
-    xTaskNotifyIndexed(sonar_task_h, SONAR_SET_SERVO_ANGLE_NOTIF_IDX, (uint32_t)angle, eSetValueWithOverwrite);
-    xTaskNotifyWaitIndexed(MAIN_SERVO_ANGLE_READY, 0x00, 0x00, NULL, portMAX_DELAY);
-}
-
-static float inline getDistance(QueueHandle_t q, uint32_t wait_ms, bool *success)
-{
-    static ultrasonic_measurement_t measurement;
-    bool                            read_ok = xQueueReceive(q, &measurement, pdMS_TO_TICKS(wait_ms));
-    if (success != NULL)
-    {
-        *success = read_ok;
-    }
-    return measurement.distance;
-}
 
 #define MIN_DISTANCE_TOLERANCE_PERCENT 0.1f
 
@@ -38,6 +19,7 @@ static inline void reset_scan_params()
 
 static int8_t scan()
 {
+    ultrasonic_measurement_t sonar_meas;
     float   distance    = 0.0;
     int16_t servo_angle = -scan_range_one_way;
 
@@ -47,20 +29,20 @@ static int8_t scan()
 
     while (servo_angle <= scan_range_one_way)
     {
-        setServo(servo_angle, sonar_task_h);
+        sonar_set_servo(servo_angle);
         vTaskDelay(pdMS_TO_TICKS(100));
-        distance = getDistance(sonar_queue_h, 300, &distance_read_ok);
+
+        sonar_meas = sonar_get_measurement(300, &distance_read_ok);
+        distance = sonar_meas.distance;
 
         if (!distance_read_ok)
         {
             ESP_LOGW(OBSTACLE_AVOIDANCE_LOG_TAG,
                      "Distance read not ok! (angle[deg]=%d)",
                      servo_angle);
-            servo_angle += 5;
             continue;
         }
 
-        // if (distance < (min_distance * (1.f - MIN_DISTANCE_TOLERANCE_PERCENT)))
         if (distance <= (min_distance - 1.5f))
         {
             min_distance  = distance;
@@ -75,7 +57,7 @@ static int8_t scan()
              closest_angle,
              min_distance);
 
-    setServo(closest_angle, sonar_task_h);
+    sonar_set_servo(closest_angle);
     return closest_angle;
 }
 
@@ -128,27 +110,14 @@ void obstacle_avoidance_task(void *pvParameters)
                         (1ULL << IR_TOP_RIGHT_GPIO) |
                         (1ULL << IR_TOP_FRONT_GPIO)};
 
-    if (sonar_queue_h != NULL || sonar_task_h != NULL)
-    {
-        esp_system_abort("Sonar queue or sonar task handle is not NULL before initialization! Aborting.");
-    }
-
     ESP_ERROR_CHECK(gpio_config(&io_conf));
-    sonar_queue_h = xQueueCreate(1, sizeof(ultrasonic_measurement_t));
-    if (sonar_queue_h == NULL)
-    {
-        ESP_LOGE(OBSTACLE_AVOIDANCE_LOG_TAG, "Failed to create sonar queue!");
-        abort();
-    }
-    sonar_task_ctx_t sonar_task_ctx = {
-        .masurements_queue_h            = sonar_queue_h,
-        .servo_angle_ready_notif_task_h = xTaskGetCurrentTaskHandle()};
-    xTaskCreate(&ultrasonic_sensor_task, "sonar", 4096, (void *)&sonar_task_ctx, 10, &sonar_task_h);
+    sonar_task_ctx_t sonar_task_ctx;
+    xTaskCreate(&ultrasonic_sensor_task, "sonar", 4096, (void *)&sonar_task_ctx, 10, NULL);
 
-    // uint8_t  ir_f                   = 0;
-    // uint8_t  ir_l                   = 0;
-    // uint8_t  ir_r                   = 0;
-    // uint8_t  bottom_ir_c                   = 0;
+    // uint8_t  ir_f                = 0;
+    // uint8_t  ir_l                = 0;
+    // uint8_t  ir_r                = 0;
+    // uint8_t  bottom_ir_c         = 0;
     uint8_t  bottom_ir_l            = 0;
     uint8_t  bottom_ir_r            = 0;
     uint32_t orchestrator_notif_val = 0;
@@ -167,7 +136,7 @@ void obstacle_avoidance_task(void *pvParameters)
             {
                 reset_scan_params();
                 completed_setting_at_angle = false;
-                setting_at_angle_ctr       = 2;
+                setting_at_angle_ctr       = 0;
                 target_angle_to_obstacle   = 0;
             }
         }
