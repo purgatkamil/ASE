@@ -20,7 +20,6 @@ typedef enum
 typedef struct
 {
     QueueHandle_t         mot_cmd_q_handle;
-    motors_control_msg_t *mot_ctrl_msg;
     TaskHandle_t          main_task_h;
 } line_follower_task_context_t;
 

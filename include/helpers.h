@@ -7,12 +7,6 @@
 
 #include <sys/time.h>
 
-// Bitwise operations macros to easy
-// set flags in motor control structure
-#define SET_BIT(var, mask)    ((var) |= (mask))
-#define CLEAR_BIT(var, mask)  ((var) &= ~(mask))
-#define IS_BIT_SET(var, mask) (((var) & (mask)) != 0)
-
 #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
 #define BYTE_TO_BINARY(byte)         \
     ((byte) & 0x80 ? '1' : '0'),     \
@@ -39,18 +33,6 @@ static inline int count_n_of_ones(unsigned int u)
       (count_n_of_ones((~var) & mask)) >= nlow))
 
 #define GET_LSB(var) var & 0x01
-
-static inline BaseType_t send_mot_spd(
-    QueueHandle_t         q,
-    motors_control_msg_t *mc,
-    double                spdLeft,
-    double                spdRight,
-    TickType_t            q_wait_ticks)
-{
-    mc->speed_cmd.left  = spdLeft;
-    mc->speed_cmd.right = spdRight;
-    return xQueueSend(q, mc, q_wait_ticks);
-}
 
 int64_t get_sys_timestamp();
 

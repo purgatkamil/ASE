@@ -117,9 +117,7 @@ static int8_t set_at_angle_to_obstacle(int8_t angle, bool *completed)
 
 void obstacle_avoidance_task(void *pvParameters)
 {
-    obstacle_avoidance_ctx_t *oa_ctx = (obstacle_avoidance_ctx_t *)pvParameters;
-    motors_control_msg_t     *mc     = oa_ctx->mot_ctrl_msg;
-    QueueHandle_t             mc_q_h = oa_ctx->mot_cmd_q_handle;
+    // obstacle_avoidance_ctx_t *oa_ctx = (obstacle_avoidance_ctx_t *)pvParameters;
 
     gpio_config_t io_conf = {
         .intr_type    = GPIO_INTR_DISABLE,
@@ -150,6 +148,9 @@ void obstacle_avoidance_task(void *pvParameters)
     // uint8_t  ir_f                   = 0;
     // uint8_t  ir_l                   = 0;
     // uint8_t  ir_r                   = 0;
+    // uint8_t  bottom_ir_c                   = 0;
+    uint8_t  bottom_ir_l            = 0;
+    uint8_t  bottom_ir_r            = 0;
     uint32_t orchestrator_notif_val = 0;
     uint8_t  active                 = 0;
 
@@ -166,7 +167,7 @@ void obstacle_avoidance_task(void *pvParameters)
             {
                 reset_scan_params();
                 completed_setting_at_angle = false;
-                setting_at_angle_ctr       = 0;
+                setting_at_angle_ctr       = 2;
                 target_angle_to_obstacle   = 0;
             }
         }
@@ -175,13 +176,37 @@ void obstacle_avoidance_task(void *pvParameters)
         // ir_f = 1 - gpio_get_level(IR_TOP_FRONT_GPIO);
         // ir_r = 1 - gpio_get_level(IR_TOP_RIGHT_GPIO);
 
+        // Line breaching
+        bottom_ir_l = (1 - gpio_get_level(IR_SENSOR_BOTTOM_LEFT_GPIO));
+        // bottom_ir_ = (1 - gpio_get_level(IR_SENSOR_BOTTOM_CENTER_GPIO));
+        bottom_ir_r = (1 - gpio_get_level(IR_SENSOR_BOTTOM_RIGHT_GPIO));
+
+        ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "LEFT: %d, RIGHT: %d", bottom_ir_l, bottom_ir_r);
+
+        if (active && (bottom_ir_l || bottom_ir_r))
+        {
+            mc_set_duty(-1.0, -1.0);
+            vTaskDelay(pdMS_TO_TICKS(200));
+
+            if (bottom_ir_l)
+            {
+                mc_set_duty(-1.0, 1.0);
+            }
+            else if (bottom_ir_r)
+            {
+                mc_set_duty(1.0, -1.0);
+            }
+            vTaskDelay(pdMS_TO_TICKS(100));
+            mc_set_duty(0.0, 0.0);
+        }
+
         if (active && setting_at_angle_ctr == 0 && completed_setting_at_angle)
         {
             completed_setting_at_angle = 0;
             setting_at_angle_ctr       = 1;
             reset_scan_params();
-            target_angle_to_obstacle   = 70;
-            scan_range_one_way         = 90;
+            target_angle_to_obstacle = 70;
+            scan_range_one_way       = 90;
             ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Completed setting at angle (0)");
         }
 
@@ -190,7 +215,12 @@ void obstacle_avoidance_task(void *pvParameters)
             // completed_setting_at_angle = 0;
             setting_at_angle_ctr = 2;
             ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Completed setting at angle (1)");
+        }
 
+        if (active && setting_at_angle_ctr == 2)
+        {
+            mc_set_duty(1.0, 1.0);
+            completed_setting_at_angle = true;
         }
 
         if (active && !completed_setting_at_angle)
@@ -202,18 +232,18 @@ void obstacle_avoidance_task(void *pvParameters)
             // Movement needed if movement dir is not zero
             if (facing_movement_dir != 0)
             {
-                SET_BIT(mc->cmd_flags, MOTORS_CONTROL_FLAGS_ENABLE);
+                mc_disable_pwm();
                 if (facing_movement_dir < 0)
                 {
-                    send_mot_spd(mc_q_h, mc, -1.0, 1.0, pdMS_TO_TICKS(0));
+                    mc_set_duty(-1.0, 1.0);
                 }
                 else if (facing_movement_dir > 0)
                 {
-                    send_mot_spd(mc_q_h, mc, 1.0, -1.0, pdMS_TO_TICKS(0));
+                    mc_set_duty(1.0, -1.0);
                 }
                 vTaskDelay(pdMS_TO_TICKS(100));
                 moved_once = 1;
-                send_mot_spd(mc_q_h, mc, 0.0, 0.0, pdMS_TO_TICKS(0));
+                mc_set_duty(0.0, 0.0);
             }
         }
 

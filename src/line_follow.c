@@ -1,80 +1,5 @@
 #include "line_follow.h"
 
-static void line_follow(uint8_t left_sensor, uint8_t center_sensor, uint8_t right_sensor,
-                        double *left_motor, double *right_motor)
-{
-    *left_motor  = 0.0;
-    *right_motor = 0.0;
-
-    double base_speed = 0.6; // Base speed for straight movement
-    double turn_speed = 0.5; // Additional speed for turning
-
-    if (center_sensor && !left_sensor && !right_sensor)
-    {
-        // Go straight
-        *left_motor  = base_speed;
-        *right_motor = base_speed;
-    }
-    else if (left_sensor && !center_sensor && !right_sensor)
-    {
-        // Turn left
-        *left_motor  = base_speed - turn_speed;
-        *right_motor = base_speed + turn_speed;
-    }
-    else if (right_sensor && !center_sensor && !left_sensor)
-    {
-        // Turn right
-        *left_motor  = base_speed + turn_speed;
-        *right_motor = base_speed - turn_speed;
-    }
-    else if (left_sensor && center_sensor && !right_sensor)
-    {
-        // Slight left adjustment
-        *left_motor  = base_speed - turn_speed / 2;
-        *right_motor = base_speed + turn_speed / 2;
-    }
-    else if (right_sensor && center_sensor && !left_sensor)
-    {
-        // Slight right adjustment
-        *left_motor  = base_speed + turn_speed / 2;
-        *right_motor = base_speed - turn_speed / 2;
-    }
-    else if (left_sensor && right_sensor)
-    {
-        // ?
-    }
-    else
-    {
-        // Go straight if line is between sensors
-        *right_motor = base_speed;
-        *left_motor  = base_speed;
-    }
-
-    // Due to imperfections in the motors in order to allow robot going relatively straight
-    // the control signals have to be adjusted by hand based on experiments
-    *right_motor -= 0.132;
-    *left_motor += 0.132;
-
-    if (*left_motor > MOTOR_MAX)
-        *left_motor = MOTOR_MAX;
-    if (*left_motor < MOTOR_MIN)
-        *left_motor = MOTOR_MIN;
-    if (*right_motor > MOTOR_MAX)
-        *right_motor = MOTOR_MAX;
-    if (*right_motor < MOTOR_MIN)
-        *right_motor = MOTOR_MIN;
-
-    // Handle starting threshold
-    if (*left_motor > 0 && *left_motor < MOTOR_START_THRESHOLD)
-        *left_motor = MOTOR_START_THRESHOLD;
-    if (*left_motor < 0 && *left_motor > -MOTOR_START_THRESHOLD)
-        *left_motor = -MOTOR_START_THRESHOLD;
-    if (*right_motor > 0 && *right_motor < MOTOR_START_THRESHOLD)
-        *right_motor = MOTOR_START_THRESHOLD;
-    if (*right_motor < 0 && *right_motor > -MOTOR_START_THRESHOLD)
-        *right_motor = -MOTOR_START_THRESHOLD;
-}
-
 static inline void init_ir_gpio()
 {
     gpio_config_t io_conf = {
@@ -94,7 +19,6 @@ void line_follower_task(void *pvParameters)
     TickType_t                    xlast_wake_time = xTaskGetTickCount();
     TickType_t                    last_turn_time  = 0;
     line_follower_task_context_t *lf_ctx          = (line_follower_task_context_t *)pvParameters;
-    motors_control_msg_t         *mc              = lf_ctx->mot_ctrl_msg;
 
     init_ir_gpio();
 
@@ -185,31 +109,6 @@ void line_follower_task(void *pvParameters)
                 }
             }
 
-            switch (movement_dir)
-            {
-            case LINE_FOLLOWER_DIR_STRAIGHT:
-                line_follow(ir_l_history & 0x01, ir_c_history & 0x01, ir_r_history & 0x01,
-                            &mc->speed_cmd.left, &mc->speed_cmd.right);
-                xQueueSend(lf_ctx->mot_cmd_q_handle, mc, pdMS_TO_TICKS(0));
-                break;
-
-            case LINE_FOLLOWER_DIR_LEFT:
-            case LINE_FOLLOWER_DIR_RIGHT:
-                int8_t sign = movement_dir == LINE_FOLLOWER_DIR_LEFT ? -1 : 1;
-                sign *= turnig_dir_interp;
-                if (turnig_dir_interp == -1)
-                {
-                    turnig_dir_interp = 1;
-                }
-                ESP_LOGI(LINE_FOLLOWER_LOG_TAG, "Turning [dir=%s]",
-                         sign < 0 ? "LEFT" : "RIGHT");
-                send_mot_spd(lf_ctx->mot_cmd_q_handle, mc, sign * 1.0, -sign * 1.0, pdMS_TO_TICKS(0));
-                vTaskDelay(pdMS_TO_TICKS(sign < 0 ? 430 + 80 : 430 + 10));
-                send_mot_spd(lf_ctx->mot_cmd_q_handle, mc, 0.9, 0.9, pdMS_TO_TICKS(0));
-                vTaskDelay(pdMS_TO_TICKS(100));
-                movement_dir = LINE_FOLLOWER_DIR_STRAIGHT;
-                break;
-            }
         }
         // Frequency of control loop = 50 Hz (1/0.02s)
         vTaskDelayUntil(&xlast_wake_time, pdMS_TO_TICKS(20));

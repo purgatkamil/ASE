@@ -6,24 +6,6 @@
 
 typedef enum
 {
-    MOTORS_CONTROL_FLAGS_ENABLE = (1 << 0),
-} motors_control_mask;
-
-typedef struct
-{
-    // Left and right speed are in range [-1; 1]
-    double left;
-    double right;
-} motors_speed_t;
-
-typedef struct
-{
-    motors_speed_t speed_cmd;
-    uint8_t        cmd_flags;
-} motors_control_msg_t;
-
-typedef enum
-{
     MISSION_STATE_IDLE = 0,
     MISSION_STATE_FOLLOW_LINE,
     MISSION_STATE_AVOID_OBSTACLE,
