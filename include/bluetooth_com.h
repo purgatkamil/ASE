@@ -30,17 +30,17 @@ typedef struct
     size_t  len;
 } bt_com_msg_t;
 
-typedef struct
-{
-    QueueHandle_t q_tosend_h;
-    QueueHandle_t q_rcv_h;
-} bt_com_task_ctx_t;
-
 typedef enum
 {
     BT_CON_DISCONNECTED = 0,
     BT_CON_CONNECTED
 } bt_con_status_t;
+
+void start_bluetooth_task();
+
+BaseType_t bluetooth_send(bt_com_msg_t *msg);
+
+BaseType_t bluetooth_wait_for_msg(bt_com_msg_t *ret, uint32_t wait_ms);
 
 void bluetooth_com_task(void *pvParameters);
 

@@ -43,6 +43,7 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
             ESP_LOGE(SPP_TAG, "ESP_SPP_INIT_EVT status:%d", param->init.status);
         }
         break;
+
     case ESP_SPP_CLOSE_EVT:
         xTaskNotify(bt_task_handle, BT_CON_DISCONNECTED, eSetValueWithOverwrite);
         break;
@@ -60,6 +61,7 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
             ESP_LOGE(SPP_TAG, "ESP_SPP_START_EVT status:%d", param->start.status);
         }
         break;
+
     case ESP_SPP_SRV_OPEN_EVT:
         ESP_LOGI(SPP_TAG, "Open event [%d]", event);
         if (param->open.status == ESP_SPP_SUCCESS)
@@ -69,6 +71,7 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
             xTaskNotifyIndexed(bt_task_handle, BT_COM_NOTIF_CON_STATE_INDEX, BT_CON_CONNECTED, eSetValueWithOverwrite);
         }
         break;
+
     case ESP_SPP_DATA_IND_EVT:
         ESP_LOGI(SPP_TAG, "ESP_SPP_DATA_IND_EVT len:%d handle:%" PRIu32,
                  param->data_ind.len, param->data_ind.handle);
@@ -85,6 +88,7 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
             ESP_LOGE(SPP_TAG, "Failed to put into rcv queue!");
         }
         break;
+
     case ESP_SPP_WRITE_EVT:
         // ESP_LOGI(SPP_TAG, "ESP_SPP_WRITE_EVT (cong=%d)", param->write.cong);
         if (param->write.cong == false)
@@ -93,6 +97,7 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
                                1, eSetValueWithOverwrite);
         }
         break;
+
     default:
         break;
     }
@@ -119,30 +124,68 @@ void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
     }
 }
 
+#ifdef LOG_OVER_BLUETOOTH
+static int dual_vprintf(const char *fmt, va_list ap)
+{
+    static bt_com_msg_t bt_msg;
+    bt_msg.len = vsnprintf((char *)bt_msg.data, BT_MSG_BUF_SIZE_BYTES, fmt, ap);
+    if (bt_msg.len > 0)
+    {
+        if (bluetooth_send(&bt_msg) != pdTRUE)
+        {
+            // ESP_LOGE(MAIN_TASK_LOG_TAG, "Can't put msg to bluetooth LOG queue!");
+        }
+    }
+    return vprintf(fmt, ap);
+}
+#endif
+
+BaseType_t bluetooth_send(bt_com_msg_t *msg)
+{
+    return xQueueSend(bt_tosend_h, msg, 0);
+}
+
+BaseType_t bluetooth_wait_for_msg(bt_com_msg_t *ret, uint32_t wait_ms)
+{
+    return xQueueReceive(bt_rcv_h, ret, pdMS_TO_TICKS(wait_ms));
+}
+
+void start_bluetooth_task()
+{
+    xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, NULL, 3, NULL, 0);
+
+    ///////////////////////////////////////
+    // Create queues for sending / receiving
+    ///////////////////////////////////////
+    bt_rcv_h    = xQueueCreate(5, sizeof(bt_com_msg_t));
+    bt_tosend_h = xQueueCreate(40, sizeof(bt_com_msg_t));
+    ///////////////////////////////////////
+
+#ifdef LOG_OVER_BLUETOOTH
+    // Line below enables sending app logs over bluetooth
+    esp_log_set_vprintf(dual_vprintf);
+    // Disable BT_HCI logs as they are truly useless
+    esp_log_level_set("BT_HCI", ESP_LOG_NONE);
+    esp_log_level_set(SPP_TAG, ESP_LOG_NONE);
+    esp_log_level_set(META_DETECTION_LOG_TAG, ESP_LOG_NONE);
+    esp_log_level_set(SONAR_SERVO_LOG_TAG, ESP_LOG_NONE);
+#endif
+}
+
 void bluetooth_com_task(void *pvParameters)
 {
     bt_task_handle = xTaskGetCurrentTaskHandle();
 
-    char      bda_str[18] = {0};
-    esp_err_t ret         = nvs_flash_init();
+    esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
-
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_BLE));
 
-    ///////////////////////////////////////
-    // Receive messaging queues from param
-    ///////////////////////////////////////
-    bt_com_task_ctx_t *bt_ctx = (bt_com_task_ctx_t *)pvParameters;
-    bt_rcv_h                  = bt_ctx->q_rcv_h;
-    bt_tosend_h               = bt_ctx->q_tosend_h;
-    ///////////////////////////////////////
-
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+        esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     if ((ret = esp_bt_controller_init(&bt_cfg)) != ESP_OK)
     {
         ESP_LOGE(SPP_TAG, "%s initialize controller failed: %s", __func__, esp_err_to_name(ret));
@@ -196,6 +239,7 @@ void bluetooth_com_task(void *pvParameters)
     esp_bt_pin_code_t pin_code = BT_PAIRING_PIN;
     esp_bt_gap_set_pin(pin_type, BT_PAIRING_PIN_LEN, pin_code);
 
+    char bda_str[18] = {0};
     ESP_LOGI(SPP_TAG, "Own address:[%s]", bda2str((uint8_t *)esp_bt_dev_get_address(), bda_str, sizeof(bda_str)));
 
     bt_con_status_t     con_st         = 0;
@@ -205,7 +249,7 @@ void bluetooth_com_task(void *pvParameters)
     {
         // Wait for connection and do not block if connection is established later
         if (xTaskNotifyWaitIndexed(BT_COM_NOTIF_CON_STATE_INDEX,
-                                   0x00, 0x00, &con_stat_notif,
+                                   0, 0, &con_stat_notif,
                                    con_st == BT_CON_CONNECTED ? pdMS_TO_TICKS(0) : portMAX_DELAY) == pdTRUE)
         {
             con_st = con_stat_notif;
@@ -218,21 +262,25 @@ void bluetooth_com_task(void *pvParameters)
             }
         }
 
-        if (xQueueReceive(bt_tosend_h, &tosend_msg, portMAX_DELAY) == pdTRUE)
+        // Wait for notification that new write can be started
+        static uint32_t write_ready = 1;
+        if (write_ready ||
+            xTaskNotifyWaitIndexed(BT_COM_NOTIF_WRITE_READY_INDEX,
+                                   0, ULONG_MAX, &write_ready, portMAX_DELAY) == pdTRUE)
         {
-            // If disconnected while waiting for message to send
-            // skip the iteration so connection notification is awaited
-            if (con_st != BT_CON_CONNECTED)
+            if (xQueueReceive(bt_tosend_h, &tosend_msg, portMAX_DELAY) == pdTRUE)
             {
-                continue;
-            }
-
-            // Wait for notification that new write can be started
-            static uint32_t write_ready = 1;
-            if (write_ready ||
-                xTaskNotifyWaitIndexed(BT_COM_NOTIF_WRITE_READY_INDEX,
-                                       0x00, ULONG_MAX, &write_ready, portMAX_DELAY) == pdTRUE)
-            {
+                // If disconnected while waiting for message to send
+                // skip the iteration so connection notification is awaited
+                if (con_st != BT_CON_CONNECTED)
+                {
+                    // Add the message back to the queue so it can be sent
+                    // when connection is regained
+                    // Perform insertion without waiting as nothing will
+                    // read from the queue in the meantime rendering deadlock
+                    xQueueSendToFront(bt_tosend_h, &tosend_msg, 0);
+                    continue;
+                }
 
                 ESP_ERROR_CHECK(
                     esp_spp_write(bt_con_handle, tosend_msg.len, tosend_msg.data));

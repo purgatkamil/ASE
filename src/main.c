@@ -10,30 +10,11 @@
 #include "helpers.h"
 #include "meta_detection.h"
 #include "motor_control.h"
-#include "wander.h"
 #include "task_notif_indexes.h"
+#include "wander.h"
 
 #ifdef COMPILE_BLUETOOTH
-
 #include "bluetooth_com.h"
-static QueueHandle_t bt_tosend_h;
-
-#ifdef LOG_OVER_BLUETOOTH
-static int dual_vprintf(const char *fmt, va_list ap)
-{
-    static bt_com_msg_t bt_msg;
-    bt_msg.len = vsnprintf((char *)bt_msg.data, BT_MSG_BUF_SIZE_BYTES, fmt, ap);
-    if (bt_msg.len > 0)
-    {
-        if (xQueueSend(bt_tosend_h, &bt_msg, 0) != pdTRUE)
-        {
-            // ESP_LOGE(MAIN_TASK_LOG_TAG, "Can't put msg to bluetooth LOG queue!");
-        }
-    }
-
-    return vprintf(fmt, ap);
-}
-#endif
 #endif
 
 void app_main()
@@ -41,51 +22,25 @@ void app_main()
     const TaskHandle_t current_task_h = xTaskGetCurrentTaskHandle();
 
 #ifdef COMPILE_BLUETOOTH
-    static QueueHandle_t bt_rcv_h;
-    bt_rcv_h    = xQueueCreate(5, sizeof(bt_com_msg_t));
-    bt_tosend_h = xQueueCreate(35, sizeof(bt_com_msg_t));
-
-    bt_com_task_ctx_t bt_ctx = {
-        .q_rcv_h    = bt_rcv_h,
-        .q_tosend_h = bt_tosend_h,};
-
-    static bt_com_msg_t bt_msg_rcv;
-
-#ifdef LOG_OVER_BLUETOOTH
-    // Line below enables sending app logs over bluetooth
-    esp_log_set_vprintf(dual_vprintf);
-    // Disable BT_HCI logs as they are truly useless
-    esp_log_level_set("BT_HCI", ESP_LOG_NONE);
-    esp_log_level_set(SPP_TAG, ESP_LOG_NONE);
-    esp_log_level_set(META_DETECTION_LOG_TAG, ESP_LOG_NONE);
-    esp_log_level_set(SONAR_SERVO_LOG_TAG, ESP_LOG_NONE);
+    start_bluetooth_task();
+    bt_com_msg_t    bt_msg_rcv;
 #endif
-#endif
+
+    xTaskCreate(&mc_motor_control_task, "motor_ctrl", 4096, NULL, 15, NULL);
+    xTaskCreate(&meta_detection_task, "meta-detect", 3048, (void *)current_task_h, 11, NULL);
 
     wander_ctx_t wander_ctx = {
         .main_task_h = current_task_h,
-        };
-
+    };
     static TaskHandle_t wander_task_h;
-
-    ////////////////////////////////// TASKS CREATION //////////////////////////////////
-    xTaskCreate(&mc_motor_control_task, "motor_ctrl", 4096, NULL, 15, NULL);
     xTaskCreate(&wander_task, "wander", 4096, (void *)&wander_ctx, 17, &wander_task_h);
-#ifdef COMPILE_BLUETOOTH
-    xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, (void *)&bt_ctx, 3, NULL, 0);
-#endif
-    xTaskCreate(&meta_detection_task, "meta-detect", 3048,(void *)current_task_h, 11, NULL);
-/////////////////////////////////////////////////////////////////////////////////////
 
     mission_state_t current_state = MISSION_STATE_IDLE;
     mission_state_t new_state     = MISSION_STATE_IDLE;
-    // mission_state_t new_state = MISSION_STATE_WANDER;
-    // int64_t             time_mission_start         = 0;
-    // bool                celebrated_once            = false;
     for (;;)
     {
 #ifdef COMPILE_BLUETOOTH
-        if (xQueueReceive(bt_rcv_h, &bt_msg_rcv, pdMS_TO_TICKS(0)) == pdTRUE)
+        if (bluetooth_wait_for_msg(&bt_msg_rcv, 0) == pdTRUE)
         {
             ESP_LOGI(MAIN_TASK_LOG_TAG, "Bt msg received (len=%d)", bt_msg_rcv.len);
             // ESP_LOG_BUFFER_HEX(MAIN_TASK_LOG_TAG, bt_msg_rcv.data, bt_msg_rcv.len);
@@ -140,6 +95,7 @@ void app_main()
             continue;
         }
 
+        // This code describes what happens when state is left
         switch (current_state)
         {
         case MISSION_STATE_IDLE:
@@ -158,6 +114,7 @@ void app_main()
             break;
         }
 
+        // This code describes what happens when new state is entered
         switch (new_state)
         {
         case MISSION_STATE_IDLE:
