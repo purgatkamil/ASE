@@ -8,7 +8,6 @@
 #include "ase_config.h"
 #include "ase_typedefs.h"
 #include "helpers.h"
-#include "line_follow.h"
 #include "meta_detection.h"
 #include "motor_control.h"
 #include "obstacle_avoidance.h"
@@ -38,13 +37,6 @@ static int dual_vprintf(const char *fmt, va_list ap)
 #endif
 #endif
 
-int64_t xx_time_get_time()
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (tv.tv_sec * 1000LL + (tv.tv_usec / 1000LL));
-}
-
 void app_main()
 {
     const TaskHandle_t current_task_h = xTaskGetCurrentTaskHandle();
@@ -56,7 +48,7 @@ void app_main()
 
     bt_com_task_ctx_t bt_ctx = {
         .q_rcv_h    = bt_rcv_h,
-        .q_tosend_h = bt_tosend_h};
+        .q_tosend_h = bt_tosend_h,};
 
     static bt_com_msg_t bt_msg_rcv;
 
@@ -71,24 +63,19 @@ void app_main()
 #endif
 #endif
 
-    line_follower_task_context_t lf_ctx = {
-        .main_task_h = current_task_h};
-
     obstacle_avoidance_ctx_t avoidance_ctx = {
-        .main_task_h = current_task_h};
+        .main_task_h = current_task_h,
+        };
 
-    static TaskHandle_t lf_task_h;
     static TaskHandle_t avoidance_task_h;
 
     ////////////////////////////////// TASKS CREATION //////////////////////////////////
     xTaskCreate(&mc_motor_control_task, "motor_ctrl", 4096, NULL, 15, NULL);
-    xTaskCreate(&line_follower_task, "line_follow", 4096, (void *)&lf_ctx, 17, &lf_task_h);
     xTaskCreate(&obstacle_avoidance_task, "avoidance", 4096, (void *)&avoidance_ctx, 17, &avoidance_task_h);
 #ifdef COMPILE_BLUETOOTH
     xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, (void *)&bt_ctx, 3, NULL, 0);
 #endif
-    xTaskCreate(&meta_detection_task, "meta-detect", 3048,
-                (void *)current_task_h, 11, NULL);
+    xTaskCreate(&meta_detection_task, "meta-detect", 3048,(void *)current_task_h, 11, NULL);
 /////////////////////////////////////////////////////////////////////////////////////
 
     mission_state_t current_state = MISSION_STATE_IDLE;
@@ -112,7 +99,6 @@ void app_main()
             {
                 // Enable line-following mode
                 mc_set_duty(0.8, 0.8);
-                new_state = MISSION_STATE_FOLLOW_LINE;
                 // time_mission_start = xx_time_get_time();
             }
             else if (m == 3)
@@ -124,9 +110,9 @@ void app_main()
             else if (m == 2)
             {
                 // Start obstacle avoidance
-                // new_state = MISSION_STATE_AVOID_OBSTACLE;
-                mc_disable_pwm();
-                mc_set_duty(1.0, 1.0);
+                new_state = MISSION_STATE_AVOID_OBSTACLE;
+                // mc_disable_pwm();
+                // mc_set_duty(1.0, 1.0);
             }
             else if (m == 1)
             {
@@ -134,19 +120,6 @@ void app_main()
             }
         }
 #endif
-
-        // if (xTaskNotifyWaitIndexed(MAIN_BOTTOM_IR_ACTIVITY_NOTIF_IDX,
-        //                            0x00, ULONG_MAX, &any_bottom_ir_active, pdTICKS_TO_MS(0)) == pdTRUE)
-        // {
-        //     // Allow changing mode with small frequency to avoid jittering
-        //     // upon obstacle detection, as robot may still be on the line.
-        //     if (current_state != MISSION_STATE_FOLLOW_LINE &&
-        //         (xTaskGetTickCount() - ticks_when_quitted) > pdMS_TO_TICKS(3000))
-        //     {
-        //         ESP_LOGI(MAIN_TASK_LOG_TAG, "Bottom IR shows activity - entering line follower mode");
-        //         new_state = MISSION_STATE_FOLLOW_LINE;
-        //     }
-        // }
 
         // static uint32_t tmp = 0;
         // if (xTaskNotifyWaitIndexed(MAIN_META_DETECTION_NOTIF_IDX,
@@ -162,18 +135,6 @@ void app_main()
         //     }
         // }
 
-        // if (xTaskNotifyWaitIndexed(MAIN_OBSTACLE_AHEAD_NOTIF_IDX,
-        //                            0x00, ULONG_MAX, &tmp, pdTICKS_TO_MS(0)) == pdTRUE)
-        // {
-        //     if (tmp == 1)
-        //         new_state = MISSION_STATE_AVOID_OBSTACLE;
-        //     else if (tmp == 2)
-        //     {
-        //         // Reverse direction of rotation in line follower for one next time
-        //         change_next_lf_turning_dir = 2;
-        //     }
-        // }
-
         // State switching
         if (current_state == new_state)
         {
@@ -185,12 +146,6 @@ void app_main()
         {
         case MISSION_STATE_IDLE:
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Quitting mission mode - IDLE");
-            break;
-
-        case MISSION_STATE_FOLLOW_LINE:
-            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Quitting mission mode - LF");
-            xTaskNotify(lf_task_h, LF_STATE_INACTIVE, eSetValueWithOverwrite);
-            // ticks_when_quitted = xTaskGetTickCount();
             break;
 
         case MISSION_STATE_AVOID_OBSTACLE:
@@ -209,12 +164,6 @@ void app_main()
         {
         case MISSION_STATE_IDLE:
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - IDLE");
-            break;
-
-        case MISSION_STATE_FOLLOW_LINE:
-            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - LF");
-            xTaskNotify(lf_task_h, LF_STATE_ACTIVE | change_next_lf_turning_dir, eSetValueWithOverwrite);
-            if (change_next_lf_turning_dir) change_next_lf_turning_dir = 0;
             break;
 
         case MISSION_STATE_AVOID_OBSTACLE:
