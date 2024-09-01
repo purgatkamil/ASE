@@ -7,9 +7,6 @@
 
 #include "ase_config.h"
 #include "ase_typedefs.h"
-#ifdef COMPILE_BLUETOOTH
-#include "bluetooth_com.h"
-#endif
 #include "helpers.h"
 #include "line_follow.h"
 #include "meta_detection.h"
@@ -19,6 +16,8 @@
 #include "task_notif_indexes.h"
 
 #ifdef COMPILE_BLUETOOTH
+
+#include "bluetooth_com.h"
 static QueueHandle_t bt_tosend_h;
 
 #ifdef LOG_OVER_BLUETOOTH
@@ -55,6 +54,12 @@ void app_main()
     bt_rcv_h    = xQueueCreate(5, sizeof(bt_com_msg_t));
     bt_tosend_h = xQueueCreate(35, sizeof(bt_com_msg_t));
 
+    bt_com_task_ctx_t bt_ctx = {
+        .q_rcv_h    = bt_rcv_h,
+        .q_tosend_h = bt_tosend_h};
+
+    static bt_com_msg_t bt_msg_rcv;
+
 #ifdef LOG_OVER_BLUETOOTH
     // Line below enables sending app logs over bluetooth
     esp_log_set_vprintf(dual_vprintf);
@@ -68,12 +73,6 @@ void app_main()
 
     line_follower_task_context_t lf_ctx = {
         .main_task_h = current_task_h};
-
-#ifdef COMPILE_BLUETOOTH
-    bt_com_task_ctx_t bt_ctx = {
-        .q_rcv_h    = bt_rcv_h,
-        .q_tosend_h = bt_tosend_h};
-#endif
 
     obstacle_avoidance_ctx_t avoidance_ctx = {
         .main_task_h = current_task_h};
@@ -92,14 +91,9 @@ void app_main()
                 (void *)current_task_h, 11, NULL);
 /////////////////////////////////////////////////////////////////////////////////////
 
-// uint32_t            any_bottom_ir_active = 0;
-#ifdef COMPILE_BLUETOOTH
-    static bt_com_msg_t bt_msg_rcv;
-#endif
     mission_state_t current_state = MISSION_STATE_IDLE;
     mission_state_t new_state     = MISSION_STATE_IDLE;
     // mission_state_t new_state = MISSION_STATE_AVOID_OBSTACLE;
-    // TickType_t          ticks_when_quitted         = 0;
     uint8_t change_next_lf_turning_dir = 0;
     // int64_t             time_mission_start         = 0;
     // bool                celebrated_once            = false;
