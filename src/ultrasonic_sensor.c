@@ -151,8 +151,8 @@ void ultrasonic_sensor_task(void *pvParameters)
     // Configure LEDC peripherial
     ledc_servo_sonar_init();
 
-    sonar_task_ctx_t *ctx                      = (sonar_task_ctx_t *)pvParameters;
-    servo_semaphore_h                          = xSemaphoreCreateBinary();
+    // sonar_task_ctx_t *ctx = (sonar_task_ctx_t *)pvParameters;
+    servo_semaphore_h = xSemaphoreCreateBinary();
 
     if (servo_semaphore_h == NULL)
     {

@@ -20,13 +20,16 @@
 ////////////////////////////////////////////////
 
 ////////////////////////////////////////////////
-////////////// AVOIDANCE ///////////////////////
+////////// WANDER & AVOIDANCE //////////////////
 ////////////////////////////////////////////////
-#define OBSTACLE_AVOIDANCE_LOG_TAG "avoidance"
+#define WANDER_LOG_TAG "wander & avoidance"
 
-#define IR_TOP_LEFT_GPIO  GPIO_NUM_36
-#define IR_TOP_RIGHT_GPIO GPIO_NUM_39
-#define IR_TOP_FRONT_GPIO GPIO_NUM_34
+#define IR_TOP_LEFT_GPIO      GPIO_NUM_36
+#define IR_TOP_RIGHT_GPIO     GPIO_NUM_39
+#define IR_TOP_FRONT_GPIO     GPIO_NUM_34
+#define IR_BOTTOM_LEFT_GPIO   GPIO_NUM_23
+#define IR_BOTTOM_RIGHT_GPIO  GPIO_NUM_22
+#define IR_BOTTOM_CENTER_GPIO GPIO_NUM_35
 ////////////////////////////////////////////////
 /**********************************************/
 ////////////////////////////////////////////////
@@ -52,9 +55,10 @@
 ////////////// MOTOR CONTROL ///////////////////
 ////////////////////////////////////////////////
 #define MOTOR_CONTROL_LOG_TAG "motor-control"
-#define MOTOR_LEFT_EN_GPIO    GPIO_NUM_14
-#define MOTOR_LEFT_IN1_GPIO   GPIO_NUM_27
-#define MOTOR_LEFT_IN2_GPIO   GPIO_NUM_26
+
+#define MOTOR_LEFT_EN_GPIO  GPIO_NUM_14
+#define MOTOR_LEFT_IN1_GPIO GPIO_NUM_27
+#define MOTOR_LEFT_IN2_GPIO GPIO_NUM_26
 
 #define MOTOR_RIGHT_EN_GPIO  GPIO_NUM_12
 #define MOTOR_RIGHT_IN1_GPIO GPIO_NUM_32
@@ -62,26 +66,6 @@
 
 #define MCPWM_RESOLUTION_HZ 10000000 // 10 MHz -> 100ns time resolution
 #define MCPWM_PERIOD_TICKS  10000    // 10 000 ticks * time resolution 100ns -> 1 kHz
-////////////////////////////////////////////////
-/**********************************************/
-////////////////////////////////////////////////
-
-////////////////////////////////////////////////
-////////////// LINE FOLLOWER ///////////////////
-////////////////////////////////////////////////
-#define LINE_FOLLOWER_LOG_TAG        "line-follower"
-#define IR_SENSOR_BOTTOM_LEFT_GPIO   GPIO_NUM_23
-#define IR_SENSOR_BOTTOM_RIGHT_GPIO  GPIO_NUM_22
-#define IR_SENSOR_BOTTOM_CENTER_GPIO GPIO_NUM_35
-
-// Define motor control output range
-#define MOTOR_MAX             0.8
-#define MOTOR_MIN             -0.9
-#define MOTOR_START_THRESHOLD 0.4
-
-// Dead time in which robot can not take another 90 deg turn.
-// Units of time are milliseconds.
-#define TURNING_DEAD_TIME_MS 5000
 ////////////////////////////////////////////////
 /**********************************************/
 ////////////////////////////////////////////////

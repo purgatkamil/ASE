@@ -1,5 +1,5 @@
-#ifndef OBSTACLE_AVOIDANCE
-#define OBSTACLE_AVOIDANCE
+#ifndef WANDER_H
+#define WANDER_H
 
 #include "freertos/FreeRTOS.h"
 
@@ -12,8 +12,8 @@
 typedef struct
 {
     TaskHandle_t          main_task_h;
-} obstacle_avoidance_ctx_t;
+} wander_ctx_t;
 
-void obstacle_avoidance_task(void *pvParameters);
+void wander_task(void *pvParameters);
 
 #endif

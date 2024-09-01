@@ -10,8 +10,7 @@
 #include "helpers.h"
 #include "meta_detection.h"
 #include "motor_control.h"
-#include "obstacle_avoidance.h"
-#include "state_transitions.h"
+#include "wander.h"
 #include "task_notif_indexes.h"
 
 #ifdef COMPILE_BLUETOOTH
@@ -63,15 +62,15 @@ void app_main()
 #endif
 #endif
 
-    obstacle_avoidance_ctx_t avoidance_ctx = {
+    wander_ctx_t wander_ctx = {
         .main_task_h = current_task_h,
         };
 
-    static TaskHandle_t avoidance_task_h;
+    static TaskHandle_t wander_task_h;
 
     ////////////////////////////////// TASKS CREATION //////////////////////////////////
     xTaskCreate(&mc_motor_control_task, "motor_ctrl", 4096, NULL, 15, NULL);
-    xTaskCreate(&obstacle_avoidance_task, "avoidance", 4096, (void *)&avoidance_ctx, 17, &avoidance_task_h);
+    xTaskCreate(&wander_task, "wander", 4096, (void *)&wander_ctx, 17, &wander_task_h);
 #ifdef COMPILE_BLUETOOTH
     xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, (void *)&bt_ctx, 3, NULL, 0);
 #endif
@@ -80,8 +79,7 @@ void app_main()
 
     mission_state_t current_state = MISSION_STATE_IDLE;
     mission_state_t new_state     = MISSION_STATE_IDLE;
-    // mission_state_t new_state = MISSION_STATE_AVOID_OBSTACLE;
-    uint8_t change_next_lf_turning_dir = 0;
+    // mission_state_t new_state = MISSION_STATE_WANDER;
     // int64_t             time_mission_start         = 0;
     // bool                celebrated_once            = false;
     for (;;)
@@ -109,8 +107,8 @@ void app_main()
             }
             else if (m == 2)
             {
-                // Start obstacle avoidance
-                new_state = MISSION_STATE_AVOID_OBSTACLE;
+                // Start wandering around & avoiding obstacles
+                new_state = MISSION_STATE_WANDER;
                 // mc_disable_pwm();
                 // mc_set_duty(1.0, 1.0);
             }
@@ -148,9 +146,9 @@ void app_main()
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Quitting mission mode - IDLE");
             break;
 
-        case MISSION_STATE_AVOID_OBSTACLE:
-            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Quitting mission mode - AVOIDANCE");
-            xTaskNotify(avoidance_task_h, AVOIDANCE_STATE_INACTIVE, eSetValueWithOverwrite);
+        case MISSION_STATE_WANDER:
+            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Quitting mission mode - WANDER");
+            xTaskNotify(wander_task_h, WANDER_STATE_INACTIVE, eSetValueWithOverwrite);
             break;
 
         case MISSION_STATE_STOP:
@@ -166,9 +164,9 @@ void app_main()
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - IDLE");
             break;
 
-        case MISSION_STATE_AVOID_OBSTACLE:
-            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - AVOIDANCE");
-            xTaskNotify(avoidance_task_h, AVOIDANCE_STATE_ACTIVE, eSetValueWithOverwrite);
+        case MISSION_STATE_WANDER:
+            ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - WANDER");
+            xTaskNotify(wander_task_h, WANDER_STATE_ACTIVE, eSetValueWithOverwrite);
             break;
 
         case MISSION_STATE_CELEBRATE:

@@ -1,4 +1,4 @@
-#include "obstacle_avoidance.h"
+#include "wander.h"
 
 #define MIN_DISTANCE_TOLERANCE_PERCENT 0.1f
 
@@ -36,7 +36,7 @@ static int8_t scan()
 
         if (!distance_read_ok)
         {
-            ESP_LOGW(OBSTACLE_AVOIDANCE_LOG_TAG,
+            ESP_LOGW(WANDER_LOG_TAG,
                      "Distance read not ok! (angle[deg]=%d)",
                      servo_angle);
             continue;
@@ -51,7 +51,7 @@ static int8_t scan()
         servo_angle += 5;
     }
 
-    ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG,
+    ESP_LOGI(WANDER_LOG_TAG,
              "Closest angle (deg): %d, min_distance: %f",
              closest_angle,
              min_distance);
@@ -73,13 +73,13 @@ static int8_t set_at_angle_to_obstacle(int8_t angle, bool *completed)
     }
     if (no_move_scan_count > 3)
     {
-        ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Can continue mission!");
+        ESP_LOGI(WANDER_LOG_TAG, "Can continue mission!");
         *completed = true;
         return 0;
     }
     if (moved_once && align_count >= 3)
     {
-        ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Found optimal position, carry on!");
+        ESP_LOGI(WANDER_LOG_TAG, "Found optimal position, carry on!");
         *completed = true;
         turn       = 0;
         return 0;
@@ -101,18 +101,18 @@ static inline void init_ir_gpio()
     gpio_config_t io_conf = {
         .intr_type    = GPIO_INTR_DISABLE,
         .mode         = GPIO_MODE_INPUT,
-        .pin_bit_mask = (1ULL << IR_SENSOR_BOTTOM_LEFT_GPIO) |
-                        (1ULL << IR_SENSOR_BOTTOM_CENTER_GPIO) |
-                        (1ULL << IR_SENSOR_BOTTOM_RIGHT_GPIO),
+        .pin_bit_mask = (1ULL << IR_BOTTOM_LEFT_GPIO) |
+                        (1ULL << IR_BOTTOM_CENTER_GPIO) |
+                        (1ULL << IR_BOTTOM_RIGHT_GPIO),
         .pull_down_en = 0,
         .pull_up_en   = 1};
 
     gpio_config(&io_conf);
 }
 
-void obstacle_avoidance_task(void *pvParameters)
+void wander_task(void *pvParameters)
 {
-    // obstacle_avoidance_ctx_t *oa_ctx = (obstacle_avoidance_ctx_t *)pvParameters;
+    // wander_ctx_t *oa_ctx = (wander_ctx_t *)pvParameters;
 
     gpio_config_t io_conf = {
         .intr_type    = GPIO_INTR_DISABLE,
@@ -143,8 +143,8 @@ void obstacle_avoidance_task(void *pvParameters)
     {
         if (xTaskNotifyWait(0, ULONG_MAX, &orchestrator_notif_val, pdMS_TO_TICKS(0)) == pdTRUE)
         {
-            // ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Notify received: %lu", orchestrator_notif_val);
-            active = orchestrator_notif_val == AVOIDANCE_STATE_ACTIVE;
+            // ESP_LOGI(WANDER_LOG_TAG, "Notify received: %lu", orchestrator_notif_val);
+            active = orchestrator_notif_val == WANDER_STATE_ACTIVE;
             if (active)
             {
                 // This code executes when active is true thus when this
@@ -165,11 +165,11 @@ void obstacle_avoidance_task(void *pvParameters)
         // Reversing logic of IR sensors, as at GPIO level 0 they are active
         // thanks to subtracting one from actual measurement if they are active
         // the value that is stored is 1, otherwise 0.
-        bottom_ir_l = (1 - gpio_get_level(IR_SENSOR_BOTTOM_LEFT_GPIO));
-        // bottom_ir_ = (1 - gpio_get_level(IR_SENSOR_BOTTOM_CENTER_GPIO));
-        bottom_ir_r = (1 - gpio_get_level(IR_SENSOR_BOTTOM_RIGHT_GPIO));
+        bottom_ir_l = (1 - gpio_get_level(IR_BOTTOM_LEFT_GPIO));
+        // bottom_ir_ = (1 - gpio_get_level(IR_BOTTOM_CENTER_GPIO));
+        bottom_ir_r = (1 - gpio_get_level(IR_BOTTOM_RIGHT_GPIO));
 
-        // ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "LEFT: %d, RIGHT: %d", bottom_ir_l, bottom_ir_r);
+        // ESP_LOGI(WANDER_LOG_TAG, "LEFT: %d, RIGHT: %d", bottom_ir_l, bottom_ir_r);
 
         if (active && (bottom_ir_l || bottom_ir_r))
         {
@@ -195,14 +195,14 @@ void obstacle_avoidance_task(void *pvParameters)
             reset_scan_params();
             target_angle_to_obstacle = 70;
             scan_range_one_way       = 90;
-            ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Completed setting at angle (0)");
+            ESP_LOGI(WANDER_LOG_TAG, "Completed setting at angle (0)");
         }
 
         if (active && setting_at_angle_ctr == 1 && completed_setting_at_angle)
         {
             // completed_setting_at_angle = 0;
             setting_at_angle_ctr = 2;
-            ESP_LOGI(OBSTACLE_AVOIDANCE_LOG_TAG, "Completed setting at angle (1)");
+            ESP_LOGI(WANDER_LOG_TAG, "Completed setting at angle (1)");
         }
 
         if (active && setting_at_angle_ctr == 2)

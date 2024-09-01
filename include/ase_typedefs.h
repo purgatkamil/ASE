@@ -7,15 +7,15 @@
 typedef enum
 {
     MISSION_STATE_IDLE = 0,
-    MISSION_STATE_AVOID_OBSTACLE,
+    MISSION_STATE_WANDER,
     MISSION_STATE_CELEBRATE,
     MISSION_STATE_STOP
 } mission_state_t;
 
 typedef enum
 {
-    AVOIDANCE_STATE_ACTIVE = 0,
-    AVOIDANCE_STATE_INACTIVE
-} avoidance_state_command_t;
+    WANDER_STATE_ACTIVE = 0,
+    WANDER_STATE_INACTIVE
+} wander_state_command_t;
 
 #endif
