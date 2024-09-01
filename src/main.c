@@ -117,7 +117,6 @@ void app_main()
             if (m == 4)
             {
                 // Enable line-following mode
-                mc_enable_pwm(true);
                 mc_set_duty(0.8, 0.8);
                 new_state = MISSION_STATE_FOLLOW_LINE;
                 // time_mission_start = xx_time_get_time();
@@ -126,13 +125,13 @@ void app_main()
             {
                 // Enable STOP mode;
                 new_state = MISSION_STATE_STOP;
-                mc_enable_pwm(false);
+                mc_disable_pwm();
             }
             else if (m == 2)
             {
                 // Start obstacle avoidance
                 // new_state = MISSION_STATE_AVOID_OBSTACLE;
-                mc_enable_pwm(true);
+                mc_disable_pwm();
                 mc_set_duty(1.0, 1.0);
             }
             else if (m == 1)
@@ -239,13 +238,13 @@ void app_main()
                 mc_set_duty(0.8, -0.8);
                 vTaskDelay(pdMS_TO_TICKS(200));
             }
-            mc_enable_pwm(false);
+            mc_disable_pwm();
             new_state = MISSION_STATE_STOP;
             break;
 
         case MISSION_STATE_STOP:
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - STOP");
-            mc_enable_pwm(false);
+            mc_disable_pwm();
         default:
             break;
         }

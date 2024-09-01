@@ -13,7 +13,7 @@
 #include "ase_typedefs.h"
 #include "helpers.h"
 
-void mc_enable_pwm(bool enable);
+void mc_disable_pwm();
 
 // Left and right duty are in range [-1; 1]
 // The sign determines direction:

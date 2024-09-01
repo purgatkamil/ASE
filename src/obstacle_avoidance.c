@@ -232,7 +232,7 @@ void obstacle_avoidance_task(void *pvParameters)
             // Movement needed if movement dir is not zero
             if (facing_movement_dir != 0)
             {
-                mc_enable_pwm(true);
+                mc_disable_pwm();
                 if (facing_movement_dir < 0)
                 {
                     mc_set_duty(-1.0, 1.0);
