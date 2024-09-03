@@ -23,6 +23,7 @@
 ////////// WANDER & AVOIDANCE //////////////////
 ////////////////////////////////////////////////
 #define WANDER_LOG_TAG "wander & avoidance"
+#define SCAN_MOVE_LOG_TAG "scan & move"
 
 #define IR_TOP_LEFT_GPIO      GPIO_NUM_36
 #define IR_TOP_RIGHT_GPIO     GPIO_NUM_39
