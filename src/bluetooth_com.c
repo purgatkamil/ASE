@@ -153,7 +153,11 @@ BaseType_t bluetooth_wait_for_msg(bt_com_msg_t *ret, uint32_t wait_ms)
 void start_bluetooth_task()
 {
     xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, NULL, 3, NULL, 0);
+    vTaskDelay(pdMS_TO_TICKS(200));
+}
 
+void bluetooth_com_task(void *pvParameters)
+{
     ///////////////////////////////////////
     // Create queues for sending / receiving
     ///////////////////////////////////////
@@ -170,10 +174,7 @@ void start_bluetooth_task()
     esp_log_level_set(META_DETECTION_LOG_TAG, ESP_LOG_NONE);
     esp_log_level_set(SONAR_SERVO_LOG_TAG, ESP_LOG_NONE);
 #endif
-}
 
-void bluetooth_com_task(void *pvParameters)
-{
     bt_task_handle = xTaskGetCurrentTaskHandle();
 
     esp_err_t ret = nvs_flash_init();
@@ -185,7 +186,7 @@ void bluetooth_com_task(void *pvParameters)
     ESP_ERROR_CHECK(ret);
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_BLE));
 
-        esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     if ((ret = esp_bt_controller_init(&bt_cfg)) != ESP_OK)
     {
         ESP_LOGE(SPP_TAG, "%s initialize controller failed: %s", __func__, esp_err_to_name(ret));
@@ -266,9 +267,9 @@ void bluetooth_com_task(void *pvParameters)
         static uint32_t write_ready = 1;
         if (write_ready ||
             xTaskNotifyWaitIndexed(BT_COM_NOTIF_WRITE_READY_INDEX,
-                                   0, ULONG_MAX, &write_ready, portMAX_DELAY) == pdTRUE)
+                                   0, ULONG_MAX, &write_ready, pdMS_TO_TICKS(1000)) == pdTRUE)
         {
-            if (xQueueReceive(bt_tosend_h, &tosend_msg, portMAX_DELAY) == pdTRUE)
+            if (xQueueReceive(bt_tosend_h, &tosend_msg, pdMS_TO_TICKS(1000)) == pdTRUE)
             {
                 // If disconnected while waiting for message to send
                 // skip the iteration so connection notification is awaited
@@ -279,7 +280,7 @@ void bluetooth_com_task(void *pvParameters)
                     // Perform insertion without waiting as nothing will
                     // read from the queue in the meantime rendering deadlock
                     xQueueSendToFront(bt_tosend_h, &tosend_msg, 0);
-                    continue;
+                    // continue;
                 }
 
                 ESP_ERROR_CHECK(

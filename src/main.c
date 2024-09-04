@@ -17,13 +17,25 @@
 #include "bluetooth_com.h"
 #endif
 
+#define SEND_BT_MISSION_STATE_MSG(STATE_STR)                                \
+    do                                                                      \
+    {                                                                       \
+        static bt_com_msg_t bt_send_msg;                                    \
+        memset(bt_send_msg.data, 0, BT_MSG_BUF_SIZE_BYTES);                 \
+        bt_send_msg.data[0]           = 1;                                  \
+        const char *mission_state_str = STATE_STR;                          \
+        memcpy(bt_send_msg.data + 1, mission_state_str, sizeof(STATE_STR)); \
+        bt_send_msg.len = sizeof(STATE_STR) + 1;                            \
+        bluetooth_send(&bt_send_msg);                                       \
+    } while (0);
+
 void app_main()
 {
     const TaskHandle_t current_task_h = xTaskGetCurrentTaskHandle();
 
 #ifdef COMPILE_BLUETOOTH
     start_bluetooth_task();
-    bt_com_msg_t    bt_msg_rcv;
+    bt_com_msg_t bt_msg_rcv;
 #endif
 
     xTaskCreate(&mc_motor_control_task, "motor_ctrl", 4096, NULL, 15, NULL);
@@ -35,10 +47,39 @@ void app_main()
     static TaskHandle_t wander_task_h;
     xTaskCreate(&wander_task, "wander", 4096, (void *)&wander_ctx, 17, &wander_task_h);
 
-    mission_state_t current_state = MISSION_STATE_IDLE;
-    mission_state_t new_state     = MISSION_STATE_IDLE;
+    mission_state_t current_state   = MISSION_STATE_IDLE;
+    mission_state_t new_state       = MISSION_STATE_IDLE;
+    TickType_t      last_sent_ticks = 0;
     for (;;)
     {
+        if (xTaskGetTickCount() - last_sent_ticks > pdMS_TO_TICKS(1000))
+        {
+            static int state_counter = 0;
+            switch (state_counter++)
+            {
+            case 0:
+                SEND_BT_MISSION_STATE_MSG("IDLE");
+                break;
+
+            case 1:
+                SEND_BT_MISSION_STATE_MSG("STOP");
+                break;
+
+            case 2:
+                SEND_BT_MISSION_STATE_MSG("WANDER");
+                break;
+
+            case 3:
+                SEND_BT_MISSION_STATE_MSG("CELEBRATE");
+                break;
+
+            default:
+                state_counter = 0;
+                break;
+            }
+            last_sent_ticks = xTaskGetTickCount();
+        }
+
 #ifdef COMPILE_BLUETOOTH
         if (bluetooth_wait_for_msg(&bt_msg_rcv, 0) == pdTRUE)
         {
