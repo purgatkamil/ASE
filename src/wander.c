@@ -20,16 +20,47 @@ static inline void init_ir_gpio()
 
 #define WANDER_SPEED() mc_set_duty(0.9, 0.9)
 
+void drift(int side)
+{
+    for (int i = 0; i < 5; i++)
+    {
+        mc_set_duty(0.0, -side * 0.9);
+        vTaskDelay(pdMS_TO_TICKS(180));
+        mc_set_duty(0.0, 0.0);
+        vTaskDelay(pdMS_TO_TICKS(100));
+
+        mc_set_duty(0.9, 0.9);
+        vTaskDelay(pdMS_TO_TICKS(180));
+        mc_set_duty(0.0, 0.0);
+        vTaskDelay(pdMS_TO_TICKS(100));
+
+        mc_set_duty(side * 0.9, 0.0);
+        vTaskDelay(pdMS_TO_TICKS(180));
+
+        mc_set_duty(-0.9, -0.9);
+        vTaskDelay(pdMS_TO_TICKS(170));
+        mc_set_duty(0.0, 0.0);
+
+        mc_set_duty(0.0, side * 0.9);
+        vTaskDelay(pdMS_TO_TICKS(200));
+
+        mc_set_duty(0.0, 0.0);
+        vTaskDelay(pdMS_TO_TICKS(120));
+    }
+}
+
 void wander_task(void *pvParameters)
 {
     // wander_ctx_t *oa_ctx = (wander_ctx_t *)pvParameters;
     // wander_task_h = xTaskGetCurrentTaskHandle();
 
+    TaskHandle_t scan_move_task_h;
+
     init_ir_gpio();
 
     sonar_task_ctx_t sonar_task_ctx;
     xTaskCreate(&ultrasonic_sensor_task, "sonar", 4096, (void *)&sonar_task_ctx, 10, NULL);
-    xTaskCreate(&scan_move_task, "scan_move", 4096, NULL, 10, NULL);
+    xTaskCreate(&scan_move_task, "scan_move", 4096, NULL, 10, &scan_move_task_h);
 
     uint8_t  ir_f                   = 0;
     uint8_t  ir_l                   = 0;
@@ -53,7 +84,14 @@ void wander_task(void *pvParameters)
                 // another state change request (activate/deactivate)
 
                 // Start moving right away
+                // WANDER_SPEED();
+
                 WANDER_SPEED();
+            }
+
+            if (!active)
+            {
+                xTaskNotify(scan_move_task_h, 0, eSetValueWithOverwrite);
             }
         }
 
@@ -73,7 +111,7 @@ void wander_task(void *pvParameters)
 
         // ESP_LOGI(WANDER_LOG_TAG, "LEFT: %d, RIGHT: %d", bottom_ir_l, bottom_ir_r);
 
-        if (ir_l || ir_f || ir_r)
+        if (ir_f)
         {
             // If any of the top sensors detects something
             // start scan move manouver after reversing for a moment
@@ -82,6 +120,18 @@ void wander_task(void *pvParameters)
             mc_set_duty(0.0, 0.0);
             static const uint32_t timeout = 60 * 1000;
             scan_move_start_and_wait(timeout);
+            WANDER_SPEED();
+        }
+
+        if (ir_r)
+        {
+            drift(1);
+            WANDER_SPEED();
+        }
+
+        if (ir_l)
+        {
+            drift(-1);
             WANDER_SPEED();
         }
 
