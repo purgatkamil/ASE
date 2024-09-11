@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">Bug App 6</string>
+    <string name="a">A</string>
+    <string name="utonomiczny">UTONOMICZNY</string>
+    <string name="s">S</string>
+    <string name="ystem">YSTEM</string>
+    <string name="e">E</string>
+    <string name="lektroniczny">LEKTRONICZNY</string>
+    <string name="select_a_device">Select a device</string>
+    <string name="discover_devices">Discover Devices</string>
+    <string name="show_logs">Show logs</string>
+    <string name="pulsing_icon">pulsing icon</string>
+    <string name="no_logs_yet">No logs yet</string>
+    <string name="stop_mission">Stop mission</string>
+    <string name="start_mission">Start mission</string>
+    <string name="robot_mission_status">Robot mission status:</string>
+    <string name="mision_status_icon">Mision status icon</string>
+    <string name="mission_time">Mission time:</string>
+    <string name="close_icon">close icon</string>
+    <string name="the_finish_line_has_been_reached">The finish line has been reached</string>
+    <string name="mission_complite">Mission complite!</string>
+    <string name="celebration_image">celebration image</string>
+</resources>

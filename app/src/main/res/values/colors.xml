@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="buttonBlue">#2250c3</color>
+    <color name="blueGradient">#294971</color>
+    <color name="red">#ff0000</color>
+    <color name="green">#008000</color>
+    <color name="darkGreen">#014901</color>
+    <color name="veryDarkGreen">#0E310E</color>
+    <color name="grey">#3C3A3A</color>
+    <color name="darkRed">#570D0D</color>
+</resources>
