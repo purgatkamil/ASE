@@ -109,7 +109,8 @@ void wander_task(void *pvParameters)
         ir_f = 1 - gpio_get_level(IR_TOP_FRONT_GPIO);
         ir_r = 1 - gpio_get_level(IR_TOP_RIGHT_GPIO);
 
-        // ESP_LOGI(WANDER_LOG_TAG, "LEFT: %d, RIGHT: %d", bottom_ir_l, bottom_ir_r);
+        // ESP_LOGI(WANDER_LOG_TAG, "LEFT: %d, RIGHT: %d, FRONT: %d", bottom_ir_l, bottom_ir_r);
+        // ESP_LOGI(WANDER_LOG_TAG, "LEFT: %d, RIGHT: %d, FRONT: %d", ir_l, ir_r, ir_f);
 
         if (ir_f)
         {

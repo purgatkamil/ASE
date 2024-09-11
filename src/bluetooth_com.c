@@ -153,7 +153,6 @@ BaseType_t bluetooth_wait_for_msg(bt_com_msg_t *ret, uint32_t wait_ms)
 void start_bluetooth_task()
 {
     xTaskCreatePinnedToCore(&bluetooth_com_task, "bt_com", 16384, NULL, 3, NULL, 0);
-    vTaskDelay(pdMS_TO_TICKS(200));
 }
 
 void bluetooth_com_task(void *pvParameters)
@@ -165,14 +164,18 @@ void bluetooth_com_task(void *pvParameters)
     bt_tosend_h = xQueueCreate(40, sizeof(bt_com_msg_t));
     ///////////////////////////////////////
 
+    vTaskDelay(pdMS_TO_TICKS(1500));
+
 #ifdef LOG_OVER_BLUETOOTH
-    // Line below enables sending app logs over bluetooth
-    esp_log_set_vprintf(dual_vprintf);
     // Disable BT_HCI logs as they are truly useless
     esp_log_level_set("BT_HCI", ESP_LOG_NONE);
     esp_log_level_set(SPP_TAG, ESP_LOG_NONE);
     esp_log_level_set(META_DETECTION_LOG_TAG, ESP_LOG_NONE);
     esp_log_level_set(SONAR_SERVO_LOG_TAG, ESP_LOG_NONE);
+    esp_log_level_set("gpio", ESP_LOG_NONE);
+
+    // Line below enables sending app logs over bluetooth
+    esp_log_set_vprintf(dual_vprintf);
 #endif
 
     bt_task_handle = xTaskGetCurrentTaskHandle();

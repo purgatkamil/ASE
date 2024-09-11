@@ -3,6 +3,7 @@
 #include "freertos/task.h"
 
 #include <driver/gpio.h>
+#include <inttypes.h>
 #include <sys/time.h>
 
 #include "ase_config.h"
@@ -47,48 +48,67 @@ void app_main()
     static TaskHandle_t wander_task_h;
     xTaskCreate(&wander_task, "wander", 4096, (void *)&wander_ctx, 17, &wander_task_h);
 
-    mission_state_t current_state   = MISSION_STATE_IDLE;
-    mission_state_t new_state       = MISSION_STATE_IDLE;
-    TickType_t      last_sent_ticks = 0;
+    mission_state_t current_state = MISSION_STATE_UNKNOWN;
+    mission_state_t new_state     = MISSION_STATE_IDLE;
+
+    int64_t timestamp_mission_start = 0;
     for (;;)
     {
-        if (xTaskGetTickCount() - last_sent_ticks > pdMS_TO_TICKS(1000))
-        {
-            static int state_counter = 0;
-            switch (state_counter++)
-            {
-            case 0:
-                SEND_BT_MISSION_STATE_MSG("IDLE");
-                break;
+        // static TickType_t last_sent_ticks = 0;
+        // if (xTaskGetTickCount() - last_sent_ticks > pdMS_TO_TICKS(1000))
+        // {
+        //     static int state_counter = 0;
+        //     switch (state_counter++)
+        //     {
+        //     case 0:
+        //         SEND_BT_MISSION_STATE_MSG("IDLE");
+        //         break;
 
-            case 1:
-                SEND_BT_MISSION_STATE_MSG("STOP");
-                break;
+        //     case 1:
+        //         SEND_BT_MISSION_STATE_MSG("STOP");
+        //         break;
 
-            case 2:
-                SEND_BT_MISSION_STATE_MSG("WANDER");
-                break;
+        //     case 2:
+        //         SEND_BT_MISSION_STATE_MSG("WANDER");
+        //         break;
 
-            case 3:
-                SEND_BT_MISSION_STATE_MSG("CELEBRATE");
-                break;
+        //     case 3:
+        //         SEND_BT_MISSION_STATE_MSG("CELEBRATE");
+        //         break;
 
-            default:
-                state_counter = 0;
-                break;
-            }
-            last_sent_ticks = xTaskGetTickCount();
-        }
+        //     default:
+        //         state_counter = 0;
+        //         break;
+        //     }
+        //     last_sent_ticks = xTaskGetTickCount();
+        // }
 
 #ifdef COMPILE_BLUETOOTH
         if (bluetooth_wait_for_msg(&bt_msg_rcv, 0) == pdTRUE)
         {
             ESP_LOGI(MAIN_TASK_LOG_TAG, "Bt msg received (len=%d)", bt_msg_rcv.len);
             // ESP_LOG_BUFFER_HEX(MAIN_TASK_LOG_TAG, bt_msg_rcv.data, bt_msg_rcv.len);
-
             uint8_t m = bt_msg_rcv.data[0];
             ESP_LOGI(MAIN_TASK_LOG_TAG, "1st byte received: " BYTE_TO_BINARY_PATTERN,
                      BYTE_TO_BINARY(m));
+
+#ifdef SUPPORT_MACIEJ_APP
+            if (bt_msg_rcv.len == 1)
+            {
+                // Command
+                if (m == 0x01)
+                {
+                    // Start
+                    new_state = MISSION_STATE_WANDER;
+                }
+                else if (m == 0xFF)
+                {
+                    // Stop
+                    new_state = MISSION_STATE_STOP;
+                }
+            }
+#endif
+#ifndef SUPPORT_MACIEJ_APP
             if (m == 4)
             {
                 // Enable line-following mode
@@ -112,9 +132,9 @@ void app_main()
             {
                 new_state = MISSION_STATE_IDLE;
             }
+#endif
         }
 #endif
-
         // static uint32_t tmp = 0;
         // if (xTaskNotifyWaitIndexed(MAIN_META_DETECTION_NOTIF_IDX,
         //                            0x00, ULONG_MAX, &tmp, pdTICKS_TO_MS(0)) == pdTRUE)
@@ -160,15 +180,24 @@ void app_main()
         {
         case MISSION_STATE_IDLE:
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - IDLE");
+            SEND_BT_MISSION_STATE_MSG("IDLE");
             break;
 
         case MISSION_STATE_WANDER:
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - WANDER");
+            SEND_BT_MISSION_STATE_MSG("WANDER");
             xTaskNotify(wander_task_h, WANDER_STATE_ACTIVE, eSetValueWithOverwrite);
+            timestamp_mission_start = get_sys_timestamp();
             break;
 
         case MISSION_STATE_CELEBRATE:
+        { // Send duration of mission
+            static bt_com_msg_t bt_msg_time_completion;
+            memset(bt_msg_time_completion.data, 0, BT_MSG_BUF_SIZE_BYTES);
+            bt_msg_time_completion.len = snprintf((char *)bt_msg_time_completion.data, BT_MSG_BUF_SIZE_BYTES, "<%" PRId64 ">",
+                                                  (get_sys_timestamp() - timestamp_mission_start));
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Celebration!! Meta found!!");
+            SEND_BT_MISSION_STATE_MSG("CELEBRATE");
             static size_t i = 0;
             for (i = 0; i < 7; i++)
             {
@@ -179,11 +208,21 @@ void app_main()
             }
             mc_disable_pwm();
             new_state = MISSION_STATE_STOP;
-            break;
+        }
+        break;
 
         case MISSION_STATE_STOP:
+        {
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Entering mission mode - STOP");
             mc_disable_pwm();
+            SEND_BT_MISSION_STATE_MSG("STOP");
+            static bt_com_msg_t bt_msg_time_completion;
+            memset(bt_msg_time_completion.data, 0, BT_MSG_BUF_SIZE_BYTES);
+            bt_msg_time_completion.len = snprintf((char *)bt_msg_time_completion.data, BT_MSG_BUF_SIZE_BYTES, "<%" PRId64 ">",
+                                                  (get_sys_timestamp() - timestamp_mission_start));
+            // bt_msg_time_completion.data[bt_msg_time_completion.len - 1] = 0x0; // remove terminating null character
+            bluetooth_send(&bt_msg_time_completion);
+        }
         default:
             break;
         }

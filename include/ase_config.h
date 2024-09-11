@@ -117,6 +117,7 @@
 ////////////// BLUETOOTH ///////////////////////
 ////////////////////////////////////////////////
 #define COMPILE_BLUETOOTH
+#define SUPPORT_MACIEJ_APP
 #define SPP_TAG         "bluetooth-com"
 #define SPP_SERVER_NAME "SPP-SERVER-ASE1"
 #define BT_DEVICE_NAME  "EIT-ASE-GR1🤖"
