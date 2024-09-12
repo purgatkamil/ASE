@@ -200,6 +200,9 @@ class MainActivity : AppCompatActivity() {
             updateLatestMessageTextView(lastMessage)
 
             if(lastMessage == "CELEBRATE") {
+                findViewById<TextView>(R.id.test11).visibility = View.VISIBLE
+                findViewById<TextView>(R.id.time).visibility = View.VISIBLE
+                
                 showCelebrateDialog()
             }
         }
@@ -241,7 +244,7 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetTextI18n")
     private fun processIncomingLogTime(log: String) {
-        val messagePattern = "(<.*?>)".toRegex()
+        val messagePattern = "(<.*?>)".toRegex()
         val matchResult = messagePattern.find(log)
         val lastMessage = matchResult?.value ?: return
 
@@ -251,10 +254,16 @@ class MainActivity : AppCompatActivity() {
         startButton.isEnabled = true
         stopButton.isEnabled = false
 
-        val messageContent = lastMessage.removePrefix("<").removeSuffix(">")
+        val messageContent = lastMessage.removePrefix("<").removeSuffix(">")
         findViewById<TextView>(R.id.test11).visibility = View.VISIBLE
         findViewById<TextView>(R.id.time).visibility = View.VISIBLE
-        timeTextView.text = "$messageContent s"
+
+        val timeInt = messageContent.toInt()
+        val timeInSeconds = timeInt / 1000
+        val timeInSecondsText = timeInSeconds.toString()
+
+        timeTextView.text = "$timeInSecondsText s"
+        //timeTextView.text = "$messageContent s"
     }
 
     private fun updateTextView(message: String) {
@@ -314,6 +323,9 @@ class MainActivity : AppCompatActivity() {
                 startButton.isEnabled = false
 
                 stopButton.isEnabled = true
+
+                timeTextView.visibility = View.GONE
+                findViewById<TextView>(R.id.test11).visibility = View.GONE
             }
         }
 
