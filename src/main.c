@@ -197,6 +197,14 @@ void app_main()
             bt_msg_time_completion.len = snprintf((char *)bt_msg_time_completion.data, BT_MSG_BUF_SIZE_BYTES, "<%" PRId64 ">",
                                                   (get_sys_timestamp() - timestamp_mission_start));
             ESP_LOGI(MAIN_MISSION_STATE_LOG_TAG, "Celebration!! Meta found!!");
+#ifdef SUPPORT_MACIEJ_APP
+            vTaskDelay(pdMS_TO_TICKS(500));
+#endif
+            bluetooth_send(&bt_msg_time_completion);
+
+#ifdef SUPPORT_MACIEJ_APP
+            vTaskDelay(pdMS_TO_TICKS(500));
+#endif
             SEND_BT_MISSION_STATE_MSG("CELEBRATE");
             static size_t i = 0;
             for (i = 0; i < 7; i++)
@@ -220,7 +228,10 @@ void app_main()
             memset(bt_msg_time_completion.data, 0, BT_MSG_BUF_SIZE_BYTES);
             bt_msg_time_completion.len = snprintf((char *)bt_msg_time_completion.data, BT_MSG_BUF_SIZE_BYTES, "<%" PRId64 ">",
                                                   (get_sys_timestamp() - timestamp_mission_start));
-            // bt_msg_time_completion.data[bt_msg_time_completion.len - 1] = 0x0; // remove terminating null character
+// bt_msg_time_completion.data[bt_msg_time_completion.len - 1] = 0x0; // remove terminating null character
+#ifdef SUPPORT_MACIEJ_APP
+            vTaskDelay(pdMS_TO_TICKS(500));
+#endif
             bluetooth_send(&bt_msg_time_completion);
         }
         default:
