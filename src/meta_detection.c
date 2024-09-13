@@ -28,14 +28,14 @@ void meta_detection_task(void *pvParameters)
     int     readings_average  = 0;
     size_t  i                 = 0;
     uint8_t certainty_measure = 0;
-    while (1)
+    for (;;)
     {
         readings_average = 0;
         for (i = 0; i < META_DETECTION_AVG_SAMPLE_CNT; i++)
         {
             ESP_ERROR_CHECK(adc_oneshot_read(adc2_handle, META_DETECTION_ADC_CHAN, &adc_out_raw));
             readings_average += adc_out_raw;
-            vTaskDelay(pdMS_TO_TICKS(20));
+            vTaskDelay(pdMS_TO_TICKS(10));
         }
 
         readings_average /= (double)META_DETECTION_AVG_SAMPLE_CNT;

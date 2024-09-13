@@ -47,7 +47,7 @@
 #define META_DETECTION_TRIG_THRESHOLD 10
 // How many samples should be averaged for computation
 // of value that is not considered meta
-#define META_DETECTION_AVG_SAMPLE_CNT 20
+#define META_DETECTION_AVG_SAMPLE_CNT 10
 ////////////////////////////////////////////////
 /**********************************************/
 ////////////////////////////////////////////////

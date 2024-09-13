@@ -2,7 +2,7 @@
 
 #define MIN_DISTANCE_TOLERANCE_PERCENT 0.1f
 
-TaskHandle_t scan_move_task_h;
+TaskHandle_t      scan_move_task_h;
 SemaphoreHandle_t manouver_done_sem_h;
 
 // Number of times robot did not move with at least one movement before
@@ -10,6 +10,7 @@ static uint8_t align_count        = 0;
 static uint8_t no_move_scan_count = 0;
 static bool    moved_once         = 0;
 static int16_t scan_range_one_way = 50;
+static int8_t  very_last_move_dir = 0;
 
 static inline void reset_scan_params()
 {
@@ -90,12 +91,14 @@ static void set_at_angle_to_obstacle(int8_t angle, bool *completed)
     if (turn < (angle + 2))
     {
         mc_set_duty(1.0, -1.0);
-        moved_once = 1;
+        moved_once         = 1;
+        very_last_move_dir = 1;
     }
     else if (turn > -(angle + 2))
     {
         mc_set_duty(-1.0, 1.0);
-        moved_once = 1;
+        moved_once         = 1;
+        very_last_move_dir = -1;
     }
     vTaskDelay(pdMS_TO_TICKS(100));
     mc_set_duty(0.0, 0.0);
@@ -110,7 +113,7 @@ void scan_move_start_and_wait(uint32_t wait_ms)
 void scan_move_task(void *pvParameters)
 {
     // scan_move_ctx_t *ctx              = (scan_move_ctx_t *)pvParameters;
-    scan_move_task_h = xTaskGetCurrentTaskHandle();
+    scan_move_task_h    = xTaskGetCurrentTaskHandle();
     manouver_done_sem_h = xSemaphoreCreateBinary();
     // TaskHandle_t     job_done_ntask_h = ctx->scn_mv_finished_task_h;
 
@@ -159,8 +162,12 @@ void scan_move_task(void *pvParameters)
             // Reaching this step means scan move is completed
             completed_setting_at_angle = true;
             // xTaskNotifyGiveIndexed(job_done_ntask_h, 1);
-            active = 0;
+            active                     = 0;
             completed_setting_at_angle = false;
+            // Add last one little move to make sure we won't drive into obstacle
+            mc_set_duty(very_last_move_dir * 1.0, -very_last_move_dir * 1.0);
+            vTaskDelay(pdMS_TO_TICKS(250));
+            mc_set_duty(0.0, 0.0);
             xSemaphoreGive(manouver_done_sem_h);
             continue;
         }

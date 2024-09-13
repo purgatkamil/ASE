@@ -70,6 +70,7 @@ void wander_task(void *pvParameters)
     uint8_t  bot_ir_r               = 0;
     uint32_t orchestrator_notif_val = 0;
     uint8_t  active                 = 0;
+    int64_t  timestamp_activated    = 0;
     for (;;)
     {
         if (xTaskNotifyWait(0, ULONG_MAX, &orchestrator_notif_val,
@@ -87,6 +88,7 @@ void wander_task(void *pvParameters)
                 // WANDER_SPEED();
 
                 WANDER_SPEED();
+                timestamp_activated = get_sys_timestamp();
             }
 
             if (!active)
@@ -141,7 +143,7 @@ void wander_task(void *pvParameters)
         bot_ir_c = (1 - gpio_get_level(IR_BOTTOM_CENTER_GPIO));
         bot_ir_r = (1 - gpio_get_level(IR_BOTTOM_RIGHT_GPIO));
 
-        if (bot_ir_l || bot_ir_c || bot_ir_r)
+        if (((get_sys_timestamp() - timestamp_activated) > 3000) && (bot_ir_l || bot_ir_c || bot_ir_r))
         {
             mc_set_duty(-0.925, -0.925);
             vTaskDelay(pdMS_TO_TICKS(700));
